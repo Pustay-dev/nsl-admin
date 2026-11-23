@@ -100,11 +100,13 @@ export function Wall() {
   };
 
   const cols = COLS[ci];
-  return html`<div class=${'wall' + (fs ? ' fs' : '') + (idle ? ' idle' : '')} ref=${box}>
+  return html`<div class=${'wall' + (fs ? ' fs' : '') + (idle ? ' idle' : '')}>
+    <div class="wall-scroll" ref=${box}>
     <div class="wall-g" style=${'--cols:' + cols}>${rows.map(it => html`<${Tile} key=${it.id} it=${it} big=${cols <= 3} onOpen=${open}/>`)}</div>
     ${end && !rows.length ? html`<div class="wall-empty">${src === 'paid' ? 'No paid portraits yet.' : 'No portraits yet.'}</div>` : ''}
     ${err ? html`<div class="wall-empty"><span>Could not load the wall.</span> <button class="btn sm" onClick=${() => setErr(null)}>Retry</button></div>` : ''}
-    <div ref=${sentinel} class="wall-s"></div>
+      <div ref=${sentinel} class="wall-s"></div>
+    </div>
     <div class="wall-ctl">
       <div class="seg" role="group"><button type="button" aria-pressed=${src === 'paid'} onClick=${() => setSrc('paid')}>Paid orders</button><button type="button" aria-pressed=${src === 'all'} onClick=${() => setSrc('all')}>All portraits</button></div>
       <button class="btn sm" onClick=${() => step(1)} disabled=${ci === COLS.length - 1} title="Smaller tiles (−)" aria-label="Smaller tiles">−</button>

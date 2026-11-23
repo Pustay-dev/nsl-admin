@@ -328,14 +328,15 @@ svg.chart rect.hm{transform-box:fill-box;transform-origin:center}
 @media (max-width:900px){.ab-layout{grid-template-columns:minmax(0,1fr)}.ab-rate{font-size:32px}}
 @media (max-width:760px){
   body{font-size:14px}
-  .shell{grid-template-columns:1fr;grid-template-rows:1fr auto}
+  /* Keep navigation above the More scrim and below dialogs mounted in the body portal. */
+  .shell{position:relative;isolation:isolate;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto}
   .side{display:none}
   .main{grid-row:1;overflow-x:hidden}
   .phone-bar{grid-row:2;display:grid;grid-template-columns:repeat(5,1fr);padding:4px 4px calc(4px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--bg);position:relative;z-index:46}
   .phone-bar a,.phone-bar button{all:unset;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;font-size:11px;color:var(--dim);cursor:pointer;text-decoration:none}
   .phone-bar svg{width:20px;height:20px}
   .phone-bar a[aria-current=page],.phone-bar button[aria-expanded=true]{color:var(--text)}.phone-bar a[aria-current=page] svg{color:var(--accent)}
-  .sheet{display:block;position:fixed;left:0;right:0;bottom:0;z-index:45;background:var(--panel);border-top:1px solid var(--line2);border-radius:var(--r2) var(--r2) 0 0;padding:16px 12px calc(76px + env(safe-area-inset-bottom));animation:sheetUp .22s var(--ease) backwards}
+  .sheet{display:block;position:absolute;grid-area:1/1/2/2;inset:auto 0 0;max-height:100%;overflow-y:auto;overscroll-behavior-y:contain;z-index:45;background:var(--panel);border-top:1px solid var(--line2);border-radius:var(--r2) var(--r2) 0 0;padding:16px 12px;animation:sheetUp .22s var(--ease) backwards}
   .sheet .side-tools{margin-top:12px}
   .goal{padding:0 16px;gap:16px;height:40px}.goal-conv{overflow:hidden}.goal-track{max-width:none;min-width:40px}.goal .hide-m,.goal-l .dim,.goal-fig:last-child{display:none}
   .ov-top,.ov-main{grid-template-columns:1fr}
@@ -416,8 +417,10 @@ svg.chart rect.hm{transform-box:fill-box;transform-origin:center}
 .zv-img{max-width:100%;max-height:100%;object-fit:contain;user-select:none;-webkit-user-drag:none;transform-origin:center center;will-change:transform}
 
 /* wall (admin/src/views/wall.js): endless portrait grid, nothing but pictures */
-.wall{position:absolute;inset:0;z-index:35;overflow-y:auto;overflow-x:hidden;background:var(--bg);scroll-behavior:auto}
+.wall{position:absolute;inset:0;z-index:35;background:var(--bg)}
+.wall-scroll{height:100%;overflow-y:auto;overflow-x:hidden;scroll-behavior:auto}
 .wall.fs{position:fixed;z-index:38;background:#0c0a09} /* below .portal (40), so the zoom viewer and toasts open on top */
+@media (max-width:760px){.wall.fs{z-index:47}} /* Above phone navigation within the isolated shell. */
 .stage-bar + .main > .wall:not(.fs){top:22px}
 .wall-g{display:grid;grid-template-columns:repeat(var(--cols,6),minmax(0,1fr));gap:2px}
 .wall-t{display:block;aspect-ratio:2/3;padding:0;border:0;border-radius:0;background:var(--bg2);cursor:zoom-in;overflow:hidden}
@@ -428,6 +431,7 @@ svg.chart rect.hm{transform-box:fill-box;transform-origin:center}
 .wall-empty{display:flex;gap:10px;align-items:center;justify-content:center;padding:80px 20px;color:var(--muted)}
 .wall-ctl{position:fixed;right:18px;bottom:18px;z-index:2;display:flex;gap:6px;align-items:center;padding:6px;border-radius:12px;background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:.9;transition:opacity .4s}
 .wall.idle .wall-ctl{opacity:0}
+@media (max-width:760px){.wall-ctl{position:absolute}}
 .wall.idle{cursor:none}
 .wall-ctl:hover,.wall-ctl:focus-within{opacity:1}
 
