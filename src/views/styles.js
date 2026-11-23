@@ -1,6 +1,5 @@
-import { html, useEffect, useState, useMemo, useRef, Icon, Pill, Drawer, Popup, Modal, Seg, Switch, Empty, Skel, ImageField, SortSelect, Picker, Emerald, EscCatcher, usePeriod, uploadStyleImage, toJpegBase64, confirm, copy, useLoad } from '../ui.js';
+import { html, useEffect, useState, useMemo, useRef, Icon, Pill, Drawer, Popup, Modal, Seg, Switch, Empty, Skel, ImageField, SortSelect, Picker, Emerald, usePeriod, uploadStyleImage, toJpegBase64, confirm, copy, useLoad } from '../ui.js';
 import { ImageTile } from '../preview.js';
-import { ZoomViewer } from '../zoom.js';
 import { rpc, fmt } from '../api.js';
 import { TestLab } from './lab.js';
 import { AiName } from './ainame.js';
@@ -53,50 +52,71 @@ function useRecent(days) {
   return r;
 }
 
-// Style card: flip through the variants with ‹ ›. The picture opens a small menu (full screen / upload new card image);
-// the text opens the editor of the variant you are looking at.
 function StyleCard({ x, recent, audiences, editable, onSaved, periodLabel }) {
-  const vars = x.variants.filter(v => v.status !== 'retired').length ? x.variants.filter(v => v.status !== 'retired') : x.variants;
+  const active = x.variants.filter(v => v.status !== 'retired');
+  const vars = active.length ? active : x.variants;
   const [i, setI] = useState(() => Math.max(0, vars.findIndex(v => v.status === 'live')));
-  const [zoom, setZoom] = useState(false), [menu, setMenu] = useState(false), [busy, setBusy] = useState(false);
-  const box = useRef(), input = useRef();
+  const [showIssues, setShowIssues] = useState(false), [busy, setBusy] = useState(false);
+  const [dismissed, setDismissed] = useState(() => {
+    try { return JSON.parse(keep('style-issues-' + x.id)) || []; } catch { return []; }
+  });
+  const rail = useRef();
+  const index = Math.max(0, Math.min(i, vars.length - 1));
+  const v = vars[index];
+  const outstanding = issues(x).filter(issue => !dismissed.includes(issue));
   useEffect(() => {
-    if (!menu) return;
-    const off = e => { if (box.current && !box.current.contains(e.target)) setMenu(false); };
-    addEventListener('pointerdown', off); return () => removeEventListener('pointerdown', off);
-  }, [menu]);
-  const v = vars[Math.min(i, vars.length - 1)];
-  const img = v?.image || x.cover_url;
+    if (!rail.current) return;
+    rail.current.scrollLeft = index * rail.current.clientWidth;
+  }, [vars.length]);
   const r = recent && recent[x.id];
   const gens = r ? r.generated : sum(x, 'generated_7d');
-  const flip = (e, d) => { e.stopPropagation(); setMenu(false); setI(k => (k + d + vars.length) % vars.length); };
   const aud = v && audiences.find(a => a.id === v.audience);
-  const upload = async file => {
-    if (!file || !v) return; setBusy(true);
-    try {
-      const u = await uploadStyleImage(file, x.id + '/' + v.id);
-      if (u) { await rpc('admin_variant_save', { p: { id: v.id, image: u, expected_updated_at: v.updated_at } }); toast('Card image replaced'); onSaved(); }
-    } catch (e) { toast(e.message, 'err', 6000); onSaved(); } finally { setBusy(false); if (input.current) input.current.value = ''; }
+  const edit = variant => go('styles/' + x.id + (variant ? '~' + variant.id : ''));
+  const flip = d => {
+    const target = (index + d + vars.length) % vars.length;
+    rail.current.scrollTo({ left: target * rail.current.clientWidth, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
   };
+  const dismiss = issue => {
+    const next = [...dismissed, issue];
+    setDismissed(next);
+    keep('style-issues-' + x.id, JSON.stringify(next));
+    if (outstanding.length === 1) setShowIssues(false);
+  };
+  const toggleStatus = async () => {
+    if (busy) return;
+    const status = v.status === 'live' ? 'hidden' : 'live';
+    setBusy(true);
+    try {
+      if (status === 'hidden' && !(await confirm({ title: 'Hide this style variant?', body: 'It will disappear from the shop listings. Customers with a direct link can still use it.', ok: 'Hide variant', danger: true }))) return;
+      if (status === 'live' && x.status !== 'live') await rpc('admin_style_save', { p: { id: x.id, status: 'live', expected_updated_at: x.updated_at } });
+      await rpc('admin_variant_save', { p: { id: v.id, status, expected_updated_at: v.updated_at } });
+      toast('Status: ' + SHOWN_LABEL[status]);
+      await onSaved();
+    } catch (e) { toast(e.message, 'err', 6000); onSaved(); } finally { setBusy(false); }
+  };
+  const toggleable = editable && v && (v.status === 'live' || v.status === 'hidden');
   return html`<div class="scard">
-    <div class="cover-wrap" ref=${box}>
-      <button type="button" class="cover" onClick=${() => (img || editable) && setMenu(m => !m)} aria-haspopup="menu" aria-expanded=${menu} aria-label=${v?.name || x.name}>${img ? html`<img src=${img} alt="" loading="lazy"/>` : html`<${Icon} n="upload" s="22"/>`}${busy && html`<span class="spinner" style="position:absolute;left:50%;top:50%;margin:-14px 0 0 -14px"></span>`}</button>
-      ${v && html`<span class="cover-pill"><${StatusPill} s=${v.status}/></span>`}
-      ${issues(x).length ? html`<span class="badge" title=${issues(x).join(' · ')}>${issues(x).length} fix</span>` : ''}
-      ${vars.length > 1 && html`<button type="button" class="flip l" onClick=${e => flip(e, -1)} aria-label="Previous variant"><${Icon} n="chevl" s="16"/></button>
-        <button type="button" class="flip r" onClick=${e => flip(e, 1)} aria-label="Next variant"><${Icon} n="chevr" s="16"/></button>
-        <span class="dots" aria-hidden="true">${vars.map((_, k) => html`<i class=${k === Math.min(i, vars.length - 1) ? 'on' : ''}></i>`)}</span>`}
-      ${menu && html`<${EscCatcher} onClose=${() => setMenu(false)}/><div class="menu card-menu" role="menu">
-        ${img && html`<button role="menuitem" onClick=${() => { setMenu(false); setZoom(true); }}><${Icon} n="full"/>Full screen</button>`}
-        ${editable && v && html`<button role="menuitem" onClick=${() => { setMenu(false); input.current.click(); }}><${Icon} n="upload"/>Upload new</button>`}</div>`}
-      <input ref=${input} type="file" accept="image/jpeg,image/png,image/webp,image/heic" hidden onChange=${e => upload(e.target.files[0])}/>
+    <div class="cover-wrap">
+      <div class="style-slides" ref=${rail} onScroll=${e => { const el = e.currentTarget; if (el.clientWidth) setI(Math.round(el.scrollLeft / el.clientWidth)); }}>
+        ${(vars.length ? vars : [null]).map(variant => {
+          const image = variant?.image || x.cover_url;
+          return html`<button key=${variant?.id || x.id} type="button" class="cover" tabIndex="-1" onClick=${() => edit(variant)} aria-label=${variant?.name || x.name}>${image ? html`<img src=${image} alt="" loading="lazy" draggable="false"/>` : html`<${Icon} n="styles" s="22"/>`}</button>`;
+        })}
+      </div>
+      ${v && (toggleable ? html`<button type="button" class="cover-pill status-toggle" onClick=${toggleStatus} disabled=${busy} title=${v.status === 'live' ? 'Hide variant' : 'Make variant live'}><${StatusPill} s=${v.status}/></button>` : html`<span class="cover-pill"><${StatusPill} s=${v.status}/></span>`)}
+      ${outstanding.length > 0 && html`<button type="button" class="badge fix-badge" onClick=${() => setShowIssues(true)}>${outstanding.length} fix</button>`}
+      ${vars.length > 1 && html`<button type="button" class="flip l" onClick=${() => flip(-1)} aria-label="Previous variant"><${Icon} n="chevl" s="16"/></button>
+        <button type="button" class="flip r" onClick=${() => flip(1)} aria-label="Next variant"><${Icon} n="chevr" s="16"/></button>
+        <span class="dots" aria-hidden="true">${vars.map((_, k) => html`<i class=${k === index ? 'on' : ''}></i>`)}</span>`}
     </div>
-    <button type="button" class="body" onClick=${() => go('styles/' + x.id + (v ? '~' + v.id : ''))}>
+    <button type="button" class="body" onClick=${() => edit(v)}>
       <span class="row between"><span class="name trunc">${v?.name || x.name}</span><span class="tiny dim">${aud?.label || ''}</span></span>
       <span class="tiny dim trunc" style="display:block">${x.name}</span>
       <span class="sstat"><span class="dim">${r ? periodLabel : '7 days'}</span><span>${fmt.n(gens)} portraits made</span>${r ? html`<${Emerald} n=${r.orders}/>` : ''}</span>
     </button>
-    ${zoom && html`<${ZoomViewer} src=${img} alt=${v?.name || x.name} onClose=${() => setZoom(false)}/>`}
+    ${showIssues && html`<${Modal} title="Style issues" onClose=${() => setShowIssues(false)}>
+      <ul class="style-issues">${outstanding.map(issue => html`<li key=${issue}><span>${issue}</span><button type="button" class="btn ghost sm" onClick=${() => dismiss(issue)}>Dismiss</button></li>`)}</ul>
+    </${Modal}>`}
   </div>`;
 }
 // Prompt lab / test lab from the ☰ menu: pick a style, then the lab opens for it.

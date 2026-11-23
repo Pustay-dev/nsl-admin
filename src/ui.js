@@ -69,12 +69,12 @@ export function Portal({ children }) {
 const escStack = [];
 // Render while a small menu is open so Escape closes the menu first, not the drawer under it.
 export function EscCatcher({ onClose }) { useEsc(onClose); return null; }
-function useEsc(onClose) {
+export function useEsc(onClose) {
   const ref = useRef(onClose); ref.current = onClose;
   useEffect(() => { const me = {}; escStack.push(me); const k = e => { if (e.key === 'Escape' && escStack[escStack.length - 1] === me) { e.preventDefault(); ref.current(); } }; addEventListener('keydown', k); return () => { removeEventListener('keydown', k); escStack.splice(escStack.indexOf(me), 1); }; }, []);
 }
 let locks = 0;
-function useLockScroll() {
+export function useLockScroll() {
   useEffect(() => { if (!locks++) document.documentElement.classList.add('locked'); return () => { if (!--locks) document.documentElement.classList.remove('locked'); }; }, []);
 }
 
@@ -174,12 +174,12 @@ export function Lightbox({ src, alt, onClose, onPrev, onNext, pos }) {
     addEventListener('keydown', k); return () => removeEventListener('keydown', k);
   }, []);
   const stop = f => e => { e.stopPropagation(); f(); };
-  return html`<${Portal}><div class="lightbox" onClick=${onClose} role="dialog" aria-modal="true" aria-label=${alt || 'image'}>
+  return html`<${Portal}><div class="lightbox" onClick=${e => { if (e.target === e.currentTarget) onClose(); }} role="dialog" aria-modal="true" aria-label=${alt || 'image'}>
     ${src ? html`<img key=${src} src=${src} alt=${alt || ''}/>` : html`<div class="spinner"></div>`}
     ${onPrev && html`<button class="btn ghost lb-nav prev" aria-label="Previous" onClick=${stop(onPrev)}><${Icon} n="chevl"/></button>`}
     ${onNext && html`<button class="btn ghost lb-nav next" aria-label="Next" onClick=${stop(onNext)}><${Icon} n="chevr"/></button>`}
     ${pos && html`<span class="lb-count">${pos} · ← →</span>`}
-    <button class="btn ghost lb-close" aria-label="Close"><${Icon} n="x"/></button></div></${Portal}>`;
+    <button class="btn ghost lb-close" onClick=${onClose} aria-label="Close"><${Icon} n="x"/></button></div></${Portal}>`;
 }
 
 // Re-run fn every `ms` while the tab is visible, and once immediately when it becomes visible again.
@@ -379,7 +379,7 @@ export function Picker({ groups, onChange, label }) {
       ${label && html`<span class="dim">${label}</span>`}${chosen.map(o => html`<span class="pv">${o.l}</span>`)}<${Icon} n="chevr" s="14"/></button>
     ${open && html`<div class=${'picker-pop ' + side} role="dialog" aria-label=${label || 'Filter'}>
       ${groups.map(g => html`<div class="pg"><div class="pg-t">${g.title}</div><div class="pg-o" role="group" aria-label=${g.title}>
-        ${g.options.map(o => html`<button type="button" aria-pressed=${o.v === g.value} onClick=${() => onChange(g.id, o.v)}>${o.l}</button>`)}</div></div>`)}
+        ${g.options.map(o => html`<button type="button" aria-pressed=${o.v === g.value} onClick=${() => { onChange(g.id, o.v); setOpen(false); }}>${o.l}</button>`)}</div></div>`)}
     </div>`}
   </div>`;
 }

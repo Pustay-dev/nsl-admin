@@ -349,6 +349,14 @@ svg.chart rect.hm{transform-box:fill-box;transform-origin:center}
   .sgrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   .scard .body{padding:10px}.scard .name{font-size:14px}
   .tbl .hide-m{display:none}
+  .tbl-wrap{min-width:0;max-width:100%;overscroll-behavior-inline:contain}
+  .tbl :is(th,td),.tbl.slim td{padding:7px 6px;overflow-wrap:anywhere}
+  .tbl td.trunc{white-space:normal}
+  .tbl.slim.orders :is(th,td){padding-inline:4px}
+  .tbl.orders .og-t:not(:first-child){display:none}
+  .tbl.orders .og-no{white-space:nowrap}
+  .tbl.orders .og>tr:first-child>td:nth-child(5){white-space:normal!important}
+  .tbl.orders .btn{height:auto;min-height:32px;padding:4px 6px;white-space:normal;line-height:1.2}
   .drawer{width:100vw;border-left:0;animation-name:sheetIn}
   .drawer>header{padding:12px 16px}.drawer>.body{padding:14px 16px 90px}.drawer>footer{padding:10px 16px;flex-wrap:wrap}
   .modal{top:auto;bottom:0;left:0;transform:none;width:100vw;max-height:88vh;max-height:88dvh;border-radius:20px 20px 0 0;animation-name:sheetUp}
@@ -473,14 +481,22 @@ svg.chart rect.hm{transform-box:fill-box;transform-origin:center}
 @media (max-width:760px){.head>.picker:has(.picker-btn){flex:1}.head>.picker .picker-btn{width:100%}.picker-pop,.picker-pop.left,.picker-pop.right{position:fixed;left:0;right:0;bottom:0;top:auto;max-width:none;width:auto;border-radius:var(--r2) var(--r2) 0 0;padding:20px 16px calc(80px + env(safe-area-inset-bottom));z-index:47}.edge,.pin{display:none}}
 /* style card with variant flipping, menu search, image tiles, variant editor */
 .cover-wrap{position:relative}
+.style-slides{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none}
+.style-slides::-webkit-scrollbar{display:none}
+.style-slides .cover{flex:0 0 100%;scroll-snap-align:start;scroll-snap-stop:always;cursor:pointer}
 .cover-pill{position:absolute;left:8px;top:8px;pointer-events:none}
+.cover-pill.status-toggle{appearance:none;border:0;padding:0;background:transparent;pointer-events:auto;cursor:pointer}
 .cover-pill .pill{background:color-mix(in srgb,var(--panel) 88%,transparent);backdrop-filter:blur(8px)}
+.fix-badge{border:0;cursor:pointer}
+.style-issues{display:grid;gap:8px;padding:0;list-style:none}
+.style-issues li{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .flip{position:absolute;top:50%;transform:translateY(-50%);width:32px;height:32px;display:grid;place-items:center;border:0;border-radius:50%;cursor:pointer;color:var(--text);background:color-mix(in srgb,var(--panel) 80%,transparent);backdrop-filter:blur(6px);opacity:0;transition:opacity var(--fast)}
 .flip.l{left:8px}.flip.r{right:8px}
 .scard:hover .flip,.flip:focus-visible{opacity:1}
 @media (hover:none){.flip{opacity:.85}}
 .dots{position:absolute;left:0;right:0;bottom:8px;display:flex;justify-content:center;gap:4px;pointer-events:none}
-.dots i{width:6px;height:6px;border-radius:50%;background:color-mix(in srgb,#fff 45%,transparent)}.dots i.on{background:#fff}
+.dots i{width:6px;height:6px;border-radius:50%;background:color-mix(in srgb,#fff 45%,transparent);transition:transform var(--fast),background-color var(--fast)}.dots i.on{background:#fff;transform:scale(1.25)}
+@media (max-width:760px){.scard .flip{display:none}.style-slides{overscroll-behavior-inline:contain}.scard .sstat{gap:4px;flex-wrap:wrap}}
 .menu-search{display:flex;align-items:center;gap:8px;padding:4px 8px 8px;margin-bottom:4px;border-bottom:1px solid var(--line)}
 .menu-search svg{color:var(--muted);flex:none}.menu-search .in{border:0;background:transparent;padding:6px 0;box-shadow:none}
 .menu{min-width:260px}
