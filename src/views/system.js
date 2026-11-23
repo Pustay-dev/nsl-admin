@@ -5,6 +5,21 @@ import { rpc, fmt } from '../api.js';
 import { toast, useStore } from '../store.js';
 import { go } from '../router.js';
 
+function FixedCostCard({ cost }) {
+  const date = new Intl.DateTimeFormat('cs-CZ', { dateStyle: 'medium', timeZone: 'UTC' });
+  const amount = cost.entries.reduce((sum, entry) => sum + entry.amount, 0);
+  return html`<div class="card" style="margin-top:12px">
+    <h3>${cost.label} <span class="grow"></span><b>${fmt.czk(-amount)}</b></h3>
+    <div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>Měsíc</th><th>Započtení do zisku</th><th class="num">Částka</th></tr></thead>
+      <tbody>${cost.entries.map(entry => html`<tr>
+        <td>${entry.month}</td><td>${date.format(new Date(entry.effective_on))}</td>
+        <td class="num">${fmt.czk(-entry.amount)}</td>
+      </tr>`)}</tbody>
+    </table></div>
+  </div>`;
+}
+
 export function System() {
   const role = useStore(s => s.role); const me = useStore(s => s.user?.email);
   const { data, error, reload } = useLoad(() => rpc('admin_system'));
@@ -58,6 +73,8 @@ export function System() {
           <button class="btn primary" disabled=${!/.+@.+\..+/.test(mem.email)} onClick=${() => { act('admin_member_set', { p_email: mem.email, p_role: mem.role }, 'Saved'); setMem({ email: '', role: 'editor' }); }}>Add</button></div></div></details>`}
       </section>
     </div>
+
+    ${data.settings.fixed_business_cost && html`<${FixedCostCard} cost=${data.settings.fixed_business_cost}/>`}
 
     <details class="more"><summary>Style factory and change log</summary>
       <div class="grid g2" style="margin-top:12px">
