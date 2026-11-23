@@ -5,7 +5,7 @@ import { html, useState, Skel, useLoad, usePeriod } from '../ui.js';
 import { rpc, fmt } from '../api.js';
 import { toast } from '../store.js';
 
-const SIZES = [['45x30', 'Small 45×30'], ['60x40', 'Medium 60×40'], ['60x90', 'Large 60×90']];
+const SIZES = [['20x30', 'Small (Mini) 20×30'], ['60x40', 'Medium 60×40'], ['60x90', 'Large 60×90']];
 const kc = v => (v == null ? '–' : (v < 0 ? '−' : '') + Math.abs(Math.round(v)).toLocaleString('cs-CZ') + ' Kč');
 
 // Totals of the last `days` days (today included) from admin_finance_summary().days; the database counts money per day.
