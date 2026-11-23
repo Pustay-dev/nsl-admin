@@ -26,12 +26,21 @@ function useSlow(fn, ms) {
 export function TopBars() {
   const fin = useSlow(() => rpc('admin_finance_summary'), 120000);
   const P = usePeriod();
-  const T = fin ? windowTotals(fin, P.days) : null, spent = T ? (T.printing || 0) + (T.generation || 0) + (T.ads || 0) + (T.other || 0) : 0;
+  const T = fin ? windowTotals(fin, P.days) : null;
+  if (T && fin.totals?.fixed_business_cost) {
+    const included = (fin.days || []).slice(-P.days)
+      .reduce((sum, day) => sum + (Number(day.fixed_business_cost) || 0), 0);
+    // The headline carries all accrued fixed costs across reporting windows.
+    const outsideWindow = fin.totals.fixed_business_cost - included;
+    T.other += outsideWindow;
+    T.profit -= outsideWindow;
+  }
+  const spent = T ? T.printing + T.generation + T.ads + T.other : 0;
   const roi = T && spent > 0 ? (T.revenue || 0) / spent : null;
 
   return html`<div class="goal" role="group" aria-label="Goal">
     <${Picker} groups=${[periodGroup(P.hours)]} onChange=${(_, v) => setPeriod(v)} label="Showing"/>
-    <button class="goal-fig" onClick=${() => go('system')} title="Profit in the chosen period: paid orders minus printing, delivery, AI and ads">
+    <button class="goal-fig" onClick=${() => go('system')} title="Profit for the selected period, including accrued fixed costs">
       <span class="goal-l">Profit</span><span class=${'mono ' + (T ? (T.profit < 0 ? 'gv-bad' : 'gv-good') : '')}>${T ? kc(T.profit) : '…'}</span></button>
     <button class="goal-fig" onClick=${() => go('system')} title="All revenue divided by all money spent. 1 is break-even">
       <span class="goal-l">Return</span><span class=${'mono ' + (roi == null ? '' : roi < 1 ? 'gv-bad' : roi < 1.5 ? 'gv-mid' : 'gv-good')}>${roi == null ? '–' : '×' + num(roi, 2)}</span></button>
