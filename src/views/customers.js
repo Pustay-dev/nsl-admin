@@ -6,6 +6,7 @@ import { toast, useStore } from '../store.js';
 import { go } from '../router.js';
 import { SessionCooldown } from './cooldown.js';
 import { ZoomViewer } from '../zoom.js';
+import { SupplierZipOrder, SupplierZipPanel, useSupplierZip } from './supplier-zip.js';
 
 const FILTERS = [{ v: 'all', l: 'all' }, { v: 'generated', l: 'generated' }, { v: 'carts', l: 'carts' }, { v: 'orders', l: 'orders' }, { v: 'contacts', l: 'email' }, { v: 'failed', l: 'failed' }, { v: 'restricted', l: 'restricted' }, { v: 'archived', l: 'reset' }];
 const SORTS = [{ v: 'hot', l: 'Hottest leads' }, { v: 'recent', l: 'Last active' }, { v: 'value', l: 'Cart / order value' }, { v: 'generations', l: 'Most portraits' }, { v: 'newest', l: 'Newest' }, { v: 'failures', l: 'Most failures' }];
@@ -178,7 +179,7 @@ function QcModal({ o, onClose, onDone }) {
     <div class="row" style="gap:14px;align-items:flex-start">${hasPrint && o.thumb && html`<div class="col" style="gap:3px;flex:none"><div class="thumb" style="width:70px"><${SImg} path=${o.thumb}/></div><div class="tiny dim">Customer preview</div></div>`}
       <div class="col" style="gap:4px"><div><b>${o.style || '–'}</b></div><div class="small">${o.material} ${o.size} × ${o.qty}</div><div class="tiny dim">revision ${o.revision}</div>
         <div class="col" style="gap:3px;margin-top:6px">${checks.map(([ok, l]) => html`<div class=${'small ' + (ok ? 'acid' : 'red')}>${ok ? '✓' : '✕'} ${l}</div>`)}</div></div></div>
-    <div class="tiny dim" style="margin-top:12px">Approving marks the print file as checked and moves the order to <b>ready to print</b>. Download the print file and send it to Kviktisk yourself.</div>
+    <div class="tiny dim" style="margin-top:12px">Approving marks the print file as checked and moves the order to <b>ready to print</b>.</div>
     <label class="f" style="margin-top:10px">${rej ? 'Why is it rejected? (required)' : 'Note (optional)'}<input class="in" value=${note} onInput=${e => setNote(e.target.value)}/></label>
     ${zoom && hasPrint && html`<${ZoomViewer} src=${pf.url} alt=${'Print file · #' + o.shopify_order_id} onClose=${() => setZoom(false)}/>`}
   </${Modal}>`;
@@ -252,7 +253,7 @@ function OrderQc({ g, onClose, onDone }) {
   </${Modal}>`;
 }
 
-function OrderRow({ g, onQc }) {
+function OrderRow({ g, onQc, zip }) {
   const [open, setOpen] = useState(false);
   const approved = g.items.every(o => o.qc === 'approved'), rejected = g.items.some(o => o.qc === 'rejected');
   return html`<tbody class=${'og' + (open ? ' open' : '')}>
@@ -261,7 +262,8 @@ function OrderRow({ g, onQc }) {
       <td><span class="og-thumbs">${g.items.slice(0, 3).map(o => html`<span class="thumb og-t"><${SImg} path=${o.thumb}/></span>`)}</span></td>
       <td style="white-space:nowrap"><b class="mono og-no">${shortNo(g)}</b>${g.test ? html` <span class="tag">test</span>` : ''}${g.items.length > 1 ? html`<span class="tiny dim" style="display:block">${g.items.length} ${lang() === 'cs' ? 'portréty' : 'portraits'}</span>` : ''}</td>
       <td>${g.waiting.length ? html`<button class="btn sm primary" onClick=${e => { e.stopPropagation(); onQc(g); }}>Quality control${g.waiting.length > 1 ? html`<span> (${g.waiting.length})</span>` : ''}</button>`
-        : html`<span class=${'stamp ' + (rejected ? 'no' : approved ? 'ok' : 'wait')}>${rejected ? 'Rejected' : approved ? 'Approved' : 'Not checked'}</span>`}</td>
+        : html`<span class=${'stamp ' + (rejected ? 'no' : approved ? 'ok' : 'wait')}>${rejected ? 'Rejected' : approved ? 'Approved' : 'Not checked'}</span>`}
+        <${SupplierZipOrder} order=${g} zip=${zip}/></td>
       <td class="small muted" style="white-space:nowrap">${fmt.date(g.at)}</td>
       <td class="hide-m small trunc" style="max-width:260px">${g.customer || ''}${g.email ? html`<span class="tiny dim" style="display:block">${g.email}</span>` : !g.customer ? html`<span class="dim">–</span>` : ''}</td>
     </tr>
@@ -275,6 +277,8 @@ function OrderRow({ g, onQc }) {
 }
 
 export function Orders() {
+  const role = useStore(s => s.role);
+  const zip = useSupplierZip(role);
   const [filter, setFilter] = useState('all');
   const { data, error, reload } = useLoad(() => rpc('admin_orders', { p_filter: filter }), [filter]);
   const [qc, setQc] = useState(null); const [all, setAll] = useState(false); const [page, setPage] = useState(0);
@@ -287,8 +291,9 @@ export function Orders() {
     <div class="head"><h1>Orders</h1>${waiting ? html`<span class="small muted">${waiting} to check</span>` : ''}<span class="grow"></span>
       <${Picker} groups=${[{ id: 'show', title: 'Show', value: filter, options: ORDER_FILTERS }]} onChange=${(_, v) => { setFilter(v); setPage(0); }}/></div>
     ${error && html`<div class="card red">${error.message}</div>`}
+    <${SupplierZipPanel} zip=${zip} owner=${role === 'owner'}/>
     <div class="card tbl-wrap" style="padding:0"><table class="tbl slim orders"><thead><tr><th></th><th></th><th>Order no.</th><th>Quality control</th><th>When</th><th class="hide-m">Customer</th></tr></thead>
-      ${!data ? html`<tbody><tr><td colspan="6"><${Skel} hgt="200"/></td></tr></tbody>` : rows.map(g => html`<${OrderRow} key=${g.id} g=${g} onQc=${setQc}/>`)}
+      ${!data ? html`<tbody><tr><td colspan="6"><${Skel} hgt="200"/></td></tr></tbody>` : rows.map(g => html`<${OrderRow} key=${g.id} g=${g} onQc=${setQc} zip=${zip}/>`)}
       ${data && !groups.length && html`<tbody><tr><td colspan="6"><${Empty}>No orders yet</${Empty}></td></tr></tbody>`}</table>
       ${data && !all && groups.length > PEEK && html`<div class="more-rows"><button class="btn ghost sm" onClick=${() => setAll(true)}>Show all</button></div>`}</div>
     ${all && pages > 1 && html`<${Pager} page=${page} pages=${pages} onPage=${setPage}/>`}

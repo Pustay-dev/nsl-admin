@@ -8,7 +8,12 @@ No build step, no runtime CDN: every dependency is stored in this folder (`vendo
 - **Overview** = today: "Needs you" (orders waiting for QC, blocked items, jobs to review, new styles to review, failures, generation off), engine card, four numbers, last 14 days, recent orders. The customisable widget board is gone.
 - **Analytics** has three areas: Website (the six old tabs), Meta (ads joined to our orders, `#/analytics/meta`), Mail (delivery stats of our own outbox, `admin_mail_report`).
 - **A/B tests**: Website tests plus Meta ad comparison (`#/experiments/meta`).
-- Removed: Mailing page (customer mails moved to Shopify; Kviktisk is sent by hand after QC), Mail analytics/A/B, Meta campaigns, Growth, Website editor. Their RPCs and tables stay in the database until the January review.
+- Removed: Mailing page, Mail analytics/A/B, Meta campaigns, Growth, Website editor. Customer mails moved to Shopify.
+
+### 23 Nov 2026 — KvikTisk in Orders
+
+- Owners can configure and pause the nightly 01:00 Prague ZIP in **Orders**. Approval remains separate. Editors queue complete approved Shopify orders and review ambiguous sends there.
+- Backend from [PR #12](https://github.com/Pustay-dev/nechsenakreslit/pull/12). Orders uses the ZIP-only `admin_mail_queue_supplier_zip` entry point so it cannot fall back to individual mail during a pause.
 - Look: graphite neutrals, one terracotta accent, Manrope (OFL, `fonts/manrope-*`), the QC stamp on orders. `STAGING_ONLY` is gone; staging still shows the amber banner.
 
 ## Security model
