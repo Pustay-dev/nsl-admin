@@ -304,7 +304,7 @@ function OrderRow({ g, onQc, onCustomer, zip }) {
   return html`<tbody class=${'og' + (open ? ' open' : '')}>
     <tr class="click" onClick=${() => setOpen(o => !o)}>
       <td style="width:28px"><${Icon} n="chevr" s="14" c="og-chev"/></td>
-      <td><span class="og-thumbs">${g.items.slice(0, 3).map(o => html`<span class="thumb og-t">${repairPending(o) ? html`<span class="spinner" style="width:14px;height:14px" aria-hidden="true"></span>` : o.repair_path ? html`<${SImg} path=${o.repair_path} bucket="print-files"/>` : html`<${SImg} path=${o.thumb}/>`}</span>`)}</span></td>
+      <td><span class="og-thumbs">${g.items.slice(0, 3).map(o => html`<span class="thumb og-t">${repairPending(o) ? html`<span class="spinner" style="width:14px;height:14px" aria-hidden="true"></span>` : o.repair_path ? html`<${SImg} path=${o.repair_path} bucket="print-files"/>` : html`<${SImg} path=${o.thumb}/>`}</span>`)}${g.items.length > 3 && html`<span class="tiny dim" style="margin-left:3px" title="Additional portraits">+${g.items.length - 3}</span>`}</span></td>
       <td style="white-space:nowrap"><b class="mono og-no">${shortNo(g)}</b>${g.test ? html` <span class="tag">test</span>` : ''}${g.items.length > 1 ? html`<span class="tiny dim" style="display:block">${g.items.length} ${lang() === 'cs' ? 'portréty' : 'portraits'}</span>` : ''}</td>
       <td>${g.waiting.length ? html`<button class="btn sm primary" onClick=${e => { e.stopPropagation(); onQc(g); }}>Quality control${g.waiting.length > 1 ? html`<span> (${g.waiting.length})</span>` : ''}</button>`
         : g.items.some(repairPending) ? html`<${RepairLoading}/>` : html`<span class=${'stamp ' + (rejected ? 'no' : approved ? 'ok' : 'wait')}>${rejected ? 'Rejected' : approved ? 'Approved' : 'Not checked'}</span>`}
