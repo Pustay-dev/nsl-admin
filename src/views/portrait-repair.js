@@ -34,8 +34,9 @@ export function RepairLoading() {
 
 export async function uploadQcPrint(o, file) {
   if (file.size > 32 * 1024 * 1024) throw new Error('PRINT_UPLOAD_TOO_LARGE');
+  // The bundled Functions client attaches the file only when it infers Content-Type.
   const { data, error } = await sb().functions.invoke('admin-qc-upload', {
-    body: file, headers: { 'Content-Type': file.type || 'application/octet-stream', 'x-qc-item': o.id, 'x-qc-revision': String(o.revision) },
+    body: file, headers: { 'x-qc-item': o.id, 'x-qc-revision': String(o.revision) },
   });
   if (error) {
     const response = await error.context?.json?.().catch(() => null);
