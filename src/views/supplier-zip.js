@@ -57,8 +57,10 @@ export function SupplierZipOrder({ order, zip }) {
 export function SupplierZipPanel({ zip, owner }) {
   const [busy, setBusy] = useState(false);
   const [address, setAddress] = useState(null);
+  const [redirect, setRedirect] = useState(null);
   if (!zip.installed) return null;
   const settings = zip.settings.data;
+  const needsRedirect = settings.sending_enabled && settings.redirect_enabled && !settings.redirect_to?.trim();
   const rows = zip.rows.filter(row => review.includes(row.status));
   const act = async (operation, reload) => {
     setBusy(true);
@@ -66,10 +68,17 @@ export function SupplierZipPanel({ zip, owner }) {
     catch (error) { toast(error.message, 'warn', 7000); }
     finally { setBusy(false); }
   };
-  const saveAddress = () => act(async () => {
-    await rpc('admin_mail_settings_set', { p: { supplier_email: address.trim() } });
-    setAddress(null);
-  }, zip.settings.reload);
+  const saveAddress = event => {
+    event.preventDefault();
+    return act(async () => {
+      const changes = {};
+      if (!settings.supplier_zip_enabled && address?.trim()) changes.supplier_email = address.trim();
+      if (settings.redirect_enabled && redirect !== null) changes.redirect_to = redirect.trim();
+      await rpc('admin_mail_settings_set', { p: changes });
+      setAddress(null);
+      setRedirect(null);
+    }, zip.settings.reload);
+  };
   const toggle = async () => {
     const enable = !settings.supplier_zip_enabled;
     const ok = await confirm({
@@ -98,15 +107,20 @@ export function SupplierZipPanel({ zip, owner }) {
       ${rows.length > 0 && html`<span class="tiny amber"> · ${rows.length} ${t('ke kontrole', 'to check')}</span>`}
     </summary>
     <div class="col" style="gap:8px;margin-top:12px">
-      ${owner && html`<div class="row wrap" style="gap:8px">
+      ${owner && html`<form class="row wrap" style="gap:8px" onSubmit=${saveAddress}>
         <label class="f">${t('Adresa tiskárny', 'Printer email')}
           <input class="in" type="email" placeholder="hesoun@kviktisk.cz" value=${address ?? settings.supplier_email ?? ''} onInput=${e => setAddress(e.target.value)} disabled=${busy || settings.supplier_zip_enabled}/>
         </label>
-        <button class="btn sm" disabled=${busy || settings.supplier_zip_enabled || !address?.trim()} onClick=${saveAddress}>${t('Uložit adresu', 'Save address')}</button>
-        <button class="btn sm" disabled=${busy || (!settings.supplier_zip_enabled && (!settings.supplier_email || !settings.sending_enabled))} onClick=${toggle}>
+        ${settings.redirect_enabled && html`<label class="f">${t('Testovací e-mail', 'Test email')}
+          <input class="in" type="email" value=${redirect ?? settings.redirect_to ?? ''} onInput=${e => setRedirect(e.target.value)} required=${settings.sending_enabled} disabled=${busy || (settings.supplier_zip_enabled && !needsRedirect)}/>
+        </label>`}
+        <button type="submit" class="btn sm" disabled=${busy || (!address?.trim() && !redirect?.trim())}>${t('Uložit adresy', 'Save addresses')}</button>
+        <button type="button" class="btn sm" disabled=${busy || (!settings.supplier_zip_enabled && (!settings.supplier_email || !settings.sending_enabled))} onClick=${toggle}>
           ${settings.supplier_zip_enabled ? t('Pozastavit', 'Pause') : t('Povolit dávku', 'Enable batches')}
         </button>
-      </div>`}
+      </form>`}
+      ${owner && needsRedirect && html`<span class="small amber">${t('Pro uložení adres vyplňte testovací e-mail.', 'Enter a test email to save the addresses.')}</span>`}
+      ${owner && settings.redirect_enabled && html`<span class="small dim">${t('Noční ZIP se posílá na adresu tiskárny. Testovací přesměrování platí pro ostatní automatické e-maily.', 'The nightly ZIP goes to the printer address. Test redirect applies to other automated emails.')}</span>`}
       ${zip.outbox.error && html`<span class="small amber">${t('Frontu se nepodařilo načíst.', 'Could not load the ZIP outbox.')}</span>`}
       ${rows.map(row => html`<div key=${row.id} class="row wrap" style="gap:8px">
         <span class="grow small">${row.subject} · ${row.supplier_zip_batch_id?.slice(0, 8) || '—'} · ${row.error_code || '—'}</span>

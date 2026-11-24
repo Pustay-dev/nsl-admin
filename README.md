@@ -36,15 +36,12 @@ Then open http://localhost:4173.
 
 ## Staging and approval (v1.10.0)
 - **Production** (the team sees it): admin.pustay.cz. **Staging** (only you): `bash admin/deploy.sh staging` -> https://pustay-dev.github.io/nsl-admin-staging/ (or your own domain: `STAGING_DOMAIN=admin-test.pustay.cz`, CNAME -> pustay-dev.github.io). Staging shows an amber banner and uses the same database and logins.
-- **Production deploy**: no approval file. Claude (or you) runs `bash admin/deploy.sh production` when you ask for it in chat; staging first is optional (`bash admin/deploy.sh staging`).
+- **Production admin deploy**: Jakub can approve a specific release in chat. The agent can then merge the verified pull request in `Pustay-dev/nsl-admin` and check the GitHub Pages deployment. Use a pull request for every production change.
 - First time only: create the empty public repo `Pustay-dev/nsl-admin-staging`, Settings -> Pages -> main / root.
 
 ## Deploy (GitHub Pages)
 Live: https://pustay-dev.github.io/nsl-admin/ (repo `Pustay-dev/nsl-admin`, Pages from `main` / root, HTTPS enforced).
-Redeploy after changes:
-```bash
-bash admin/deploy.sh production
-```
+Merging a pull request into `main` triggers the Pages deployment.
 `*.github.io` origins are already allowed by the `admin-dashboard` Edge Function, which handles session deletion.
 
 ## Customer-journey analytics (v1.11.0)
