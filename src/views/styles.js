@@ -181,7 +181,7 @@ export function Styles({ openId }) {
 
   return html`<div class="page">
     <div class="head"><h1>Styles</h1>${q && html`<button class="pv" style="border:0;cursor:pointer" onClick=${() => setQ('')} title="Clear search">„${q}" ×</button>`}<span class="grow"></span>
-      <${Picker} groups=${groups} onChange=${pick}/>
+      <${Picker} groups=${groups} onChange=${pick} dialogTitle="Filtry stylů"/>
       <div class="picker" ref=${menuRef}><button class="btn" aria-expanded=${menu} aria-haspopup="menu" onClick=${() => setMenu(m => !m)} aria-label="Style actions"><${Icon} n="more"/></button>
         ${menu && html`<div class="menu" role="menu">
           <label class="menu-search"><${Icon} n="search"/><input class="in" placeholder="Search styles and variants" value=${q} onInput=${e => setQ(e.target.value)} onKeyDown=${e => e.key === 'Enter' && setMenu(false)} autoFocus/></label>

@@ -361,26 +361,26 @@ export function shared(name, args = {}) {
 /* ---------- one filter component for the whole admin ----------
    A button that shows the chosen values as pills; it opens a panel to the side with titled groups of options.
    groups: [{ id, title, value, options: [{ v, l }] }], onChange(groupId, value). On phones the panel is a bottom sheet. */
-export function Picker({ groups, onChange, label }) {
+export function Picker({ groups, onChange, label, dialogTitle }) {
   const [open, setOpen] = useState(false), [side, setSide] = useState('right');
   const ref = useRef();
   useEffect(() => {
-    if (!open) return;
+    if (!open || dialogTitle) return;
     const r = ref.current?.getBoundingClientRect();
     if (r) setSide(r.left + r.width / 2 > innerWidth / 2 ? 'left' : 'right');
     const off = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     const esc = e => { if (e.key === 'Escape') setOpen(false); };
     addEventListener('pointerdown', off); addEventListener('keydown', esc);
     return () => { removeEventListener('pointerdown', off); removeEventListener('keydown', esc); };
-  }, [open]);
+  }, [open, dialogTitle]);
   const chosen = groups.map(g => g.options.find(o => o.v === g.value)).filter(Boolean);
+  const options = () => groups.map(g => html`<div class="pg"><div class="pg-t">${g.title}</div><div class="pg-o" role="group" aria-label=${g.title}>
+    ${g.options.map(o => html`<button type="button" aria-pressed=${o.v === g.value} onClick=${() => { onChange(g.id, o.v); if (!dialogTitle) setOpen(false); }}>${o.l}</button>`)}</div></div>`);
   return html`<div class="picker" ref=${ref}>
     <button type="button" class="picker-btn" aria-expanded=${open} aria-haspopup="dialog" onClick=${() => setOpen(o => !o)}>
       ${label && html`<span class="dim">${label}</span>`}${chosen.map(o => html`<span class="pv">${o.l}</span>`)}<${Icon} n="chevr" s="14"/></button>
-    ${open && html`<div class=${'picker-pop ' + side} role="dialog" aria-label=${label || 'Filter'}>
-      ${groups.map(g => html`<div class="pg"><div class="pg-t">${g.title}</div><div class="pg-o" role="group" aria-label=${g.title}>
-        ${g.options.map(o => html`<button type="button" aria-pressed=${o.v === g.value} onClick=${() => { onChange(g.id, o.v); setOpen(false); }}>${o.l}</button>`)}</div></div>`)}
-    </div>`}
+    ${open && (dialogTitle ? html`<${Modal} title=${dialogTitle} onClose=${() => setOpen(false)} footer=${html`<button type="button" class="btn primary" onClick=${() => setOpen(false)}>Hotovo</button>`}>
+      <div class="col" style="gap:14px">${options()}</div></${Modal}>` : html`<div class=${'picker-pop ' + side} role="dialog" aria-label=${label || 'Filter'}>${options()}</div>`)}
   </div>`;
 }
 
