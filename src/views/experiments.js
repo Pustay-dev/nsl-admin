@@ -94,14 +94,20 @@ function Behaviour({ id }) {
 
 /* ---------- what can be tested (no theme editing: the shop applies it from the admin) ---------- */
 const SECTIONS = [
-  ['Customer reactions (videos)', '#reakce'], ['Before / after gallery', '#inspirace'], ['Style discovery', '#styly'], ['FAQ', '.nsl-v6-faq-layout'], ['Benefits', '.nsl-v4-benefits'],
+  ['Popular styles showcase', '[data-ff-showcase]'], ['FAQ', '#otazky'],
 ];
 const PRESETS = [
-  { id: 'hero_title', title: 'Headline', hint: 'Main heading at the top of the home page', type: 'text', sel: '.nsl-v4-apphero h1', page: 'home', ph: 'New headline' },
-  { id: 'hero_intro', title: 'Intro text', hint: 'Paragraph under the headline', type: 'text', sel: '.nsl-v4-apphero-intro', page: 'home', ph: 'New intro text' },
-  { id: 'cta', title: 'Button text', hint: 'The orange "Vytvořit portrét zdarma" buttons', type: 'text', sel: '.nsl-v4-button-label', page: 'all', ph: 'e.g. Vytvořit portrét' },
-  { id: 'hero_note', title: 'Line under the button', hint: '"Nejdřív náhled. Objednávka je jen na vás."', type: 'text', sel: '.nsl-v4-start > p', page: 'home', ph: 'New reassurance line' },
-  { id: 'hide', title: 'Hide a section', hint: 'Does the page convert better without it?', type: 'hide_section', page: 'home' },
+  { id: 'hero_intro', title: 'Gift or free preview?', hint: 'Home intro. Lead with a gift for people and pets, then explain the free preview.', type: 'text', sel: '.ff-hero__lead', page: 'home', ph: 'New intro text',
+    suggestion: 'Proměňte fotku rodičů, dětí nebo mazlíčka v osobní dárek na plátně. Portrét si nejdřív prohlédnete zdarma.' },
+  { id: 'hero_start', title: 'First button', hint: 'Home hero. Test if a photo-specific action or a free-preview promise gets more people started.', type: 'text', sel: '[data-ff-start] > .ff-cta__main', page: 'home', ph: 'New button text',
+    suggestion: 'Vytvořit náhled zdarma' },
+  { id: 'hero_note', title: 'Reassurance under the first button', hint: 'Home hero. Test purchase reassurance against the existing no-card message.', type: 'text', sel: '[data-ff-start] > .ff-cta__sub', page: 'home', ph: 'New reassurance line',
+    suggestion: 'Nejdřív náhled zdarma · pak se rozhodnete' },
+  { id: 'preview', title: 'Reveal button', hint: 'Home quiz, after size selection. Make it clear that the next step is the portrait preview.', type: 'text', sel: '[data-ff-reveal] > .ff-cta__main', page: 'home', ph: 'New preview button text',
+    suggestion: 'Zobrazit můj náhled zdarma' },
+  { id: 'showcase', title: 'Popular styles button', hint: 'Below the popular portraits. Test whether inviting visitors to use their own photo makes the next step clearer.', type: 'text', sel: '[data-ff-showcase] .ff-cta__main', page: 'home', ph: 'New showcase button text',
+    suggestion: 'Vyzkoušet styl na vlastní fotce' },
+  { id: 'hide', title: 'Hide a section', hint: 'Home only. See whether visitors reach paid orders more often on a shorter page.', type: 'hide_section', page: 'home' },
   { id: 'custom', title: 'Something else', hint: 'Any element (CSS selector) on any page', type: 'text', custom: true, page: 'all', ph: 'New text' },
 ];
 const PAGES = [['all', 'All pages'], ['home', 'Home'], ['creator', 'Creator'], ['product', 'Product'], ['cart', 'Cart']];
@@ -135,13 +141,14 @@ function NewTest({ onClose, onDone }) {
   return html`<${Modal} title="New A/B test" onClose=${onClose} footer=${html`<button class="btn ghost" onClick=${onClose}>Cancel</button><span class="grow"></span><button class="btn primary" disabled=${!ok || busy} onClick=${start}>${busy ? 'Starting…' : 'Start test'}</button>`}>
     <div class="col" style="gap:14px">
       <div><div class="small"><b>1 · What do you want to test?</b></div>
-        <div class="ab-presets">${PRESETS.map(x => html`<button class=${'ab-preset ' + (p === x.id ? 'on' : '')} onClick=${() => setP(x.id)}><b>${x.title}</b><span>${x.hint}</span></button>`)}</div></div>
+        <div class="ab-presets">${PRESETS.map(x => html`<button type="button" class=${'ab-preset ' + (p === x.id ? 'on' : '')} onClick=${() => { if (p !== x.id) { setP(x.id); setVal(''); } }}><b>${x.title}</b><span>${x.hint}</span></button>`)}</div></div>
       ${pre && pre.type === 'hide_section' && html`<div><div class="small"><b>2 · Which section should B visitors not see?</b></div>
         <select class="in" value=${sec} onChange=${e => setSec(e.target.value)}>${SECTIONS.map(([l, s]) => html`<option value=${s}>${l}</option>`)}</select></div>`}
       ${pre && pre.type === 'text' && html`<div><div class="small"><b>2 · What should B visitors read instead?</b></div>
-        ${pre.custom && html`<div class="grid g2" style="margin:6px 0"><input class="in" placeholder="CSS selector, e.g. .nsl-v4-apphero h1" value=${sel} onInput=${e => setSel(e.target.value)}/>
+        ${pre.custom && html`<div class="grid g2" style="margin:6px 0"><input class="in" placeholder="CSS selector, e.g. .ff-hero__lead" value=${sel} onInput=${e => setSel(e.target.value)}/>
           <select class="in" value=${page} onChange=${e => setPage(e.target.value)}>${PAGES.map(([v, l]) => html`<option value=${v}>${l}</option>`)}</select></div>`}
         <input class="in" maxlength="300" placeholder=${pre.ph} value=${val} onInput=${e => setVal(e.target.value)}/>
+        ${pre.suggestion && html`<button type="button" class="btn ghost sm" onClick=${() => setVal(pre.suggestion)}>Use suggestion</button>`}
         <div class="tiny dim" style="margin-top:4px">A (everyone else) keeps today's text. Plain text only.</div></div>`}
       ${pre && html`<div class="tiny dim"><b>3 · We split visitors ${100 - share} / ${share} and count who ends up with a paid order.</b> ${!adv && html`<a href="#/experiments" onClick=${e => { e.preventDefault(); setAdv(true); }}>Advanced</a>`}</div>`}
       ${pre && adv && html`<div class="card col" style="gap:10px"><label class="small">Name<input class="in" placeholder=${title} value=${name} onInput=${e => setName(e.target.value)}/></label>

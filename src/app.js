@@ -83,6 +83,22 @@ function Shell() {
   useEffect(() => { if (legacy) go(legacy.join('/')); }, [route[0]]);
   const view = NAV.some(n => n.id === route[0]) ? route[0] : 'overview', arg = route[1];
   useEffect(() => setMore(false), [view, arg]);
+  const auto = !pin && (closed || view !== 'overview');
+  useEffect(() => {
+    const onClick = e => {
+      if (!(e.target instanceof Element) || e.target.closest('[data-keep-nav]')) return;
+      const action = e.target.closest('button:not(:disabled), a[href], [role="button"]');
+      const mobile = more && (action || !e.target.closest('.sheet, .phone-bar'));
+      const desktop = (peek || !auto) && matchMedia('(min-width:761px) and (hover:hover) and (pointer:fine)').matches
+        && (action || !e.target.closest('.side'));
+      if (mobile || desktop) setTimeout(() => {
+        if (mobile) setMore(false);
+        if (desktop) { clearTimeout(hideT.current); close(); }
+      }, 0);
+    };
+    document.addEventListener('click', onClick, true);
+    return () => document.removeEventListener('click', onClick, true);
+  }, [auto, more, peek]);
 
   useEffect(() => {
     let chord = null, chordT;
@@ -120,13 +136,12 @@ function Shell() {
     <button class="btn ghost sm" onClick=${() => setLang(lang() === 'cs' ? 'en' : 'cs')} title="Language" aria-label="Language">${lang() === 'cs' ? 'EN' : 'CZ'}</button>
     <button class="btn ghost sm" onClick=${() => lock('Locked')} title="Lock (Ctrl L)" aria-label="Lock"><${Icon} n="lock"/></button></div>`;
 
-  const auto = !pin && (closed || view !== 'overview');
   return html`<div class=${'shell' + (auto ? ' autohide' : '') + (auto && peek ? ' peek' : '')}>
     ${auto && html`<div class="edge" onMouseEnter=${show} aria-hidden="true"></div>
-      ${!peek && html`<button class="side-open" onClick=${reopen} aria-label="Open menu" title="Open menu"><${Icon} n="more"/></button>`}`}
+      ${!peek && html`<button class="side-open" data-keep-nav onClick=${reopen} aria-label="Open menu" title="Open menu"><${Icon} n="more"/></button>`}`}
     <nav class="side" aria-label="Main" onMouseEnter=${auto ? show : undefined} onMouseLeave=${auto ? hide : undefined} onFocusIn=${auto ? show : undefined}>
       <div class="brand"><b>nakreslime</b><span>admin</span>
-        <button class="btn ghost sm pin" aria-pressed=${pin} onClick=${togglePin} title=${pin ? 'Let the menu hide' : 'Keep the menu open'} aria-label="Keep the menu open"><${Icon} n="pin" s="14"/></button>
+        <button class="btn ghost sm pin" data-keep-nav aria-pressed=${pin} onClick=${togglePin} title=${pin ? 'Let the menu hide' : 'Keep the menu open'} aria-label="Keep the menu open"><${Icon} n="pin" s="14"/></button>
         <button class="btn ghost sm side-x" onClick=${close} title="Close menu" aria-label="Close menu"><${Icon} n="chevl" s="14"/></button></div>
       <div class="nav">${NAV.map((n, i) => html`${n.group && n.group !== NAV[i - 1]?.group ? html`<div class="nav-g">${n.group}</div>` : ''}${link(n)}`)}</div>
       <div class="side-foot">
@@ -137,7 +152,7 @@ function Shell() {
     </nav>
     <nav class="phone-bar" aria-label="Main">
       ${NAV.filter(n => PHONE.includes(n.id)).map(link)}
-      <button type="button" aria-expanded=${more} onClick=${() => setMore(m => !m)}><${Icon} n="more"/><span>More</span></button>
+      <button type="button" data-keep-nav aria-expanded=${more} onClick=${() => setMore(m => !m)}><${Icon} n="more"/><span>More</span></button>
     </nav>
     ${more && html`<div class="scrim" onClick=${() => setMore(false)}></div><div class="sheet" role="dialog" aria-label="More">
       <div class="nav">${NAV.filter(n => !PHONE.includes(n.id)).map(link)}</div>${tools}<div class="who">${user?.email} · ${role}</div></div>`}

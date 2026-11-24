@@ -69,12 +69,12 @@ export function Portal({ children }) {
 const escStack = [];
 // Render while a small menu is open so Escape closes the menu first, not the drawer under it.
 export function EscCatcher({ onClose }) { useEsc(onClose); return null; }
-function useEsc(onClose) {
+export function useEsc(onClose) {
   const ref = useRef(onClose); ref.current = onClose;
   useEffect(() => { const me = {}; escStack.push(me); const k = e => { if (e.key === 'Escape' && escStack[escStack.length - 1] === me) { e.preventDefault(); ref.current(); } }; addEventListener('keydown', k); return () => { removeEventListener('keydown', k); escStack.splice(escStack.indexOf(me), 1); }; }, []);
 }
 let locks = 0;
-function useLockScroll() {
+export function useLockScroll() {
   useEffect(() => { if (!locks++) document.documentElement.classList.add('locked'); return () => { if (!--locks) document.documentElement.classList.remove('locked'); }; }, []);
 }
 
@@ -174,12 +174,12 @@ export function Lightbox({ src, alt, onClose, onPrev, onNext, pos }) {
     addEventListener('keydown', k); return () => removeEventListener('keydown', k);
   }, []);
   const stop = f => e => { e.stopPropagation(); f(); };
-  return html`<${Portal}><div class="lightbox" onClick=${onClose} role="dialog" aria-modal="true" aria-label=${alt || 'image'}>
+  return html`<${Portal}><div class="lightbox" onClick=${e => { if (e.target === e.currentTarget) onClose(); }} role="dialog" aria-modal="true" aria-label=${alt || 'image'}>
     ${src ? html`<img key=${src} src=${src} alt=${alt || ''}/>` : html`<div class="spinner"></div>`}
     ${onPrev && html`<button class="btn ghost lb-nav prev" aria-label="Previous" onClick=${stop(onPrev)}><${Icon} n="chevl"/></button>`}
     ${onNext && html`<button class="btn ghost lb-nav next" aria-label="Next" onClick=${stop(onNext)}><${Icon} n="chevr"/></button>`}
     ${pos && html`<span class="lb-count">${pos} · ← →</span>`}
-    <button class="btn ghost lb-close" aria-label="Close"><${Icon} n="x"/></button></div></${Portal}>`;
+    <button class="btn ghost lb-close" onClick=${onClose} aria-label="Close"><${Icon} n="x"/></button></div></${Portal}>`;
 }
 
 // Re-run fn every `ms` while the tab is visible, and once immediately when it becomes visible again.
@@ -361,26 +361,26 @@ export function shared(name, args = {}) {
 /* ---------- one filter component for the whole admin ----------
    A button that shows the chosen values as pills; it opens a panel to the side with titled groups of options.
    groups: [{ id, title, value, options: [{ v, l }] }], onChange(groupId, value). On phones the panel is a bottom sheet. */
-export function Picker({ groups, onChange, label }) {
+export function Picker({ groups, onChange, label, dialogTitle }) {
   const [open, setOpen] = useState(false), [side, setSide] = useState('right');
   const ref = useRef();
   useEffect(() => {
-    if (!open) return;
+    if (!open || dialogTitle) return;
     const r = ref.current?.getBoundingClientRect();
     if (r) setSide(r.left + r.width / 2 > innerWidth / 2 ? 'left' : 'right');
     const off = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     const esc = e => { if (e.key === 'Escape') setOpen(false); };
     addEventListener('pointerdown', off); addEventListener('keydown', esc);
     return () => { removeEventListener('pointerdown', off); removeEventListener('keydown', esc); };
-  }, [open]);
+  }, [open, dialogTitle]);
   const chosen = groups.map(g => g.options.find(o => o.v === g.value)).filter(Boolean);
+  const options = () => groups.map(g => html`<div class="pg"><div class="pg-t">${g.title}</div><div class="pg-o" role="group" aria-label=${g.title}>
+    ${g.options.map(o => html`<button type="button" aria-pressed=${o.v === g.value} onClick=${() => { onChange(g.id, o.v); if (!dialogTitle) setOpen(false); }}>${o.l}</button>`)}</div></div>`);
   return html`<div class="picker" ref=${ref}>
     <button type="button" class="picker-btn" aria-expanded=${open} aria-haspopup="dialog" onClick=${() => setOpen(o => !o)}>
       ${label && html`<span class="dim">${label}</span>`}${chosen.map(o => html`<span class="pv">${o.l}</span>`)}<${Icon} n="chevr" s="14"/></button>
-    ${open && html`<div class=${'picker-pop ' + side} role="dialog" aria-label=${label || 'Filter'}>
-      ${groups.map(g => html`<div class="pg"><div class="pg-t">${g.title}</div><div class="pg-o" role="group" aria-label=${g.title}>
-        ${g.options.map(o => html`<button type="button" aria-pressed=${o.v === g.value} onClick=${() => onChange(g.id, o.v)}>${o.l}</button>`)}</div></div>`)}
-    </div>`}
+    ${open && (dialogTitle ? html`<${Modal} title=${dialogTitle} onClose=${() => setOpen(false)} footer=${html`<button type="button" class="btn primary" onClick=${() => setOpen(false)}>Hotovo</button>`}>
+      <div class="col" style="gap:14px">${options()}</div></${Modal}>` : html`<div class=${'picker-pop ' + side} role="dialog" aria-label=${label || 'Filter'}>${options()}</div>`)}
   </div>`;
 }
 
