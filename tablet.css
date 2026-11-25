@@ -1,0 +1,83 @@
+/* The More menu is mounted by the shell. Hide its backdrop when rotating into desktop navigation. */
+.shell > .scrim { display: none; }
+
+@media (max-width: 760px) {
+  .shell > .scrim { display: block; }
+}
+
+@media (min-width: 761px) and (max-width: 1100px),
+       (min-width: 761px) and (max-width: 1366px) and (pointer: coarse) {
+  .shell, .shell.autohide {
+    position: relative;
+    isolation: isolate;
+    grid-template: minmax(0, 1fr) auto / minmax(0, 1fr);
+  }
+
+  .shell > .side,
+  .shell > .edge,
+  .shell > .side-open { display: none; }
+
+  .shell > .main {
+    grid-area: 1 / 1;
+    min-height: 0;
+  }
+
+  .page { padding: 24px clamp(20px, 3vw, 32px) 36px; }
+  .goal { gap: 16px; padding-inline: clamp(20px, 3vw, 32px); }
+  .page .tbl-wrap { max-width: 100%; }
+
+  .shell > .phone-bar {
+    grid-area: 2 / 1;
+    display: flex;
+    justify-content: center;
+    gap: clamp(8px, 3vw, 48px);
+    padding: 4px 12px calc(4px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--line);
+    background: var(--bg);
+    position: relative;
+    z-index: 46;
+  }
+
+  .phone-bar > a, .phone-bar > button {
+    all: unset;
+    display: flex;
+    min-width: 88px;
+    min-height: 48px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    color: var(--dim);
+  }
+
+  .phone-bar > :is(a, button):focus-visible { outline: 2px solid var(--accent); }
+  .phone-bar :is([aria-current="page"], [aria-expanded="true"]) { color: var(--text); }
+  .phone-bar a[aria-current="page"] svg { color: var(--accent); }
+
+  .shell > .scrim {
+    display: block;
+    position: absolute;
+    grid-area: 1 / 1 / 2 / 2;
+  }
+
+  .shell > .sheet {
+    display: block;
+    position: absolute;
+    grid-area: 1 / 1 / 2 / 2;
+    inset: auto max(16px, env(safe-area-inset-right, 0px)) 8px auto;
+    width: min(360px, calc(100% - 32px));
+    max-height: calc(100% - 16px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    z-index: 45;
+    padding: 16px;
+    background: var(--panel);
+    border: 1px solid var(--line2);
+    border-radius: var(--r2);
+    box-shadow: var(--shadow-lg);
+    animation: sheetUp .22s var(--ease) backwards;
+  }
+
+  .sheet .side-tools { margin-top: 12px; }
+  .wall.fs { z-index: 47; }
+}
