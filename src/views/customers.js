@@ -7,6 +7,7 @@ import { go } from '../router.js';
 import { SessionCooldown } from './cooldown.js';
 import { ZoomViewer } from '../zoom.js';
 import { SupplierZipOrder, SupplierZipPanel, useSupplierZip } from './supplier-zip.js';
+import { AdvanceFulfilment, FulfilmentBadge, orderFulfilment } from './order-fulfilment.js';
 import { RepairLoading, RepairRegion, repairPending, uploadQcPrint, useRepairOrders } from './portrait-repair.js';
 
 const FILTERS = [{ v: 'all', l: 'all' }, { v: 'generated', l: 'generated' }, { v: 'carts', l: 'carts' }, { v: 'orders', l: 'orders' }, { v: 'contacts', l: 'email' }, { v: 'failed', l: 'failed' }, { v: 'restricted', l: 'restricted' }, { v: 'archived', l: 'reset' }];
@@ -161,6 +162,11 @@ const QC_ERR = { STALE_PRINT_REVISION: 'This order changed, reload and try again
   PRINT_FORMAT_REQUIRES_REVIEW: 'Tento formát teď nelze použít pro tisk.', PRINT_UPLOAD_FAILED: 'Nahrání náhrady se nezdařilo.' };
 const qcMsg = e => { const m = String(e?.message || e || ''); const k = Object.keys(QC_ERR).find(x => m.includes(x)); return k ? QC_ERR[k] : m; };
 
+function QcPrintButton({ src, onClick, compact = false }) {
+  return html`<button type="button" class="btn ghost" style=${'height:auto;padding:0;border:0;overflow:hidden;cursor:zoom-in;align-self:center;max-width:' + (compact ? '120px' : '100%')}
+    onClick=${onClick} aria-label="Zvětšit tiskový soubor"><img src=${src} alt="Tiskový soubor" style="display:block;max-width:100%;max-height:52vh;width:auto;height:auto;object-fit:contain"/></button>`;
+}
+
 // Quality control: look at the order, then approve (-> ready to print; the team sends it to Kviktisk by hand) or reject (-> blocked, with a reason).
 function QcModal({ o, onClose, onDone }) {
   const [note, setNote] = useState(''); const [busy, setBusy] = useState(false); const [rej, setRej] = useState(false);
@@ -196,12 +202,10 @@ function QcModal({ o, onClose, onDone }) {
   const canReview = editor && o.production === 'awaiting_qc';
   return html`<${Modal} title=${'Quality control · #' + o.shopify_order_id} onClose=${saving ? () => {} : onClose} footer=${html`<button class="btn" onClick=${onClose} disabled=${saving}>Cancel</button>
     ${canReview && html`<button class="btn danger" disabled=${saving || (rej && (!note.trim() || (editing && !region)))} onClick=${() => (rej ? run('reject') : setRej(true))}>${editing ? 'Zamítnout a opravit' : rej ? 'Confirm reject' : 'Reject'}</button>
-      <button class="btn primary" disabled=${saving || rej || (o.repair_path && !hasPrint) || !checks.every(c => c[0])} onClick=${() => run('approve')}>Approve</button>`}` }>
+      <button class="btn primary" disabled=${saving || rej || !hasPrint || !checks.every(c => c[0])} onClick=${() => run('approve')}>Approve</button>`}` }>
     ${editing ? (busy ? html`<${RepairLoading}/>` : hasPrint ? html`<${RepairRegion} src=${pf.url} region=${region} onChange=${setRegion}/>` : html`<span class="small">${pf.loading ? 'Načítám tiskový soubor…' : 'Tiskový soubor se nepodařilo načíst.'}</span>`) : html`<div class="col" style="gap:8px;margin-bottom:12px">
-      ${o.has_file ? (pf.loading ? html`<div class="thumb" style="width:100%;min-height:200px"></div>` : hasPrint ? html`<button class="thumb" style="width:100%;cursor:zoom-in;padding:0;border:0" title="Open print file (zoom)" onClick=${() => setZoom(true)}><${SImg} path=${pf.path} bucket="print-files" alt="Print file"/></button>
-        <div class="row" style="gap:10px"><button class="btn sm" onClick=${() => setZoom(true)}><${Icon} n="eye"/> Open print file (zoom)</button><span class="tiny dim">Print-ready file (private)</span></div>` : html`<div class="small amber">Print file could not be loaded. Showing the customer preview instead.</div>`) : html`<div class="small amber">No print file stored for this order yet. Showing the customer preview instead.</div>`}
-      ${!o.repair_path && !hasPrint && !pf.loading && o.thumb && html`<div class="thumb" style="width:100%"><${SImg} path=${o.thumb}/></div>`}</div>`}
-    <div class="row" style="gap:14px;align-items:flex-start">${hasPrint && o.thumb && html`<div class="col" style="gap:3px;flex:none"><div class="thumb" style="width:70px"><${SImg} path=${o.thumb}/></div><div class="tiny dim">Customer preview</div></div>`}
+      ${pf.loading ? html`<span class="small" role="status">Načítám tiskový soubor…</span>` : hasPrint ? html`<${QcPrintButton} src=${pf.url} onClick=${() => setZoom(true)}/>` : html`<span class="small amber">${o.has_file ? 'Tiskový soubor se nepodařilo načíst.' : 'Tiskový soubor zatím není k dispozici.'}</span>`}</div>`}
+    <div class="row" style="gap:14px;align-items:flex-start">
       <div class="col" style="gap:4px"><div><b>${o.style || '–'}</b></div><div class="small">${o.material} ${o.size} × ${o.qty}</div><div class="tiny dim">revision ${o.revision}</div>
         <div class="col" style="gap:3px;margin-top:6px">${checks.map(([ok, l]) => html`<div class=${'small ' + (ok ? 'acid' : 'red')}>${ok ? '✓' : '✕'} ${l}</div>`)}</div></div></div>
     <div class="tiny dim" style="margin-top:12px">Approving marks the print file as checked and moves the order to <b>ready to print</b>.</div>
@@ -248,6 +252,7 @@ function QcCell({ o, onOpen }) {
   if (repairPending(o)) return html`<${RepairLoading}/>`;
   if (o.repair === 'failed' || (o.qc === 'rejected' && o.manual_upload_available)) return html`<button type="button" class="btn sm" disabled=${!o.manual_upload_available} onClick=${e => { e.stopPropagation(); onOpen(o); }}>${o.repair === 'failed' ? 'Oprava se nezdařila' : 'Rejected'} · Nahrát náhradu</button>`;
   if (o.production === 'awaiting_qc') return html`<button class="btn sm primary" onClick=${e => { e.stopPropagation(); onOpen(o); }}>Quality control</button>`;
+  if (o.fulfilment) return html`<${FulfilmentBadge} status=${o.fulfilment}/>`;
   const tone = o.qc === 'approved' ? 'ok' : o.qc === 'rejected' ? 'no' : 'wait';
   return html`<span class=${'stamp ' + tone}>${o.qc === 'approved' ? 'Approved' : o.qc === 'rejected' ? 'Rejected' : 'Not checked'}</span><div class="tiny dim">${String(o.production || '').replaceAll('_', ' ')}</div>${o.hold && html`<div class="tiny amber">${o.hold}</div>`}`;
 }
@@ -266,6 +271,16 @@ function groupOrders(list) {
   return [...by.values()].map(g => ({ ...g, waiting: g.items.filter(o => o.production === 'awaiting_qc') }));
 }
 
+function QcPrintThumb({ o }) {
+  const pf = usePrintFile(o);
+  const [zoom, setZoom] = useState(false);
+  if (repairPending(o)) return html`<${RepairLoading}/>`;
+  if (pf.loading) return html`<span class="tiny" role="status">Načítám tiskový soubor…</span>`;
+  if (!pf.url) return html`<span class="tiny amber">${o.hold === 'PRINT_INPUT_INVALID' ? 'Příprava tisku vyžaduje kontrolu' : 'Tiskový soubor není dostupný'}</span>`;
+  return html`<${QcPrintButton} src=${pf.url} compact onClick=${() => setZoom(true)}/>
+    ${zoom && html`<${ZoomViewer} src=${pf.url} alt="Tiskový soubor" onClose=${() => setZoom(false)}/>`}`;
+}
+
 function OrderQc({ g, onClose, onDone }) {
   const [busy, setBusy] = useState(false), [one, setOne] = useState(null);
   const ready = g.waiting.filter(o => o.has_file && o.payment === 'paid' && !o.hold && !o.test);
@@ -276,35 +291,38 @@ function OrderQc({ g, onClose, onDone }) {
   };
   return html`<${Modal} title=${'Quality control · ' + shortNo(g)} onClose=${onClose} cls="qc-all" footer=${html`<button class="btn lg ghost" onClick=${onClose}>Cancel</button>
       <button class="btn lg primary" disabled=${busy || !ready.length} onClick=${approveAll}>${busy ? 'Approving…' : html`<span>Approve all</span> <span>(${ready.length})</span>`}</button>`}>
-    <div class="qc-grid">${g.waiting.map(o => html`<div class="qc-item">
-      ${o.repair_path ? html`<span class="thumb" style="width:120px"><${SImg} path=${o.repair_path} bucket="print-files"/></span>` : html`<${PreviewThumb} path=${o.thumb} w=${120}/>`}
+    <div class="qc-grid">${g.items.map(o => html`<div class="qc-item" key=${o.id}>
+      <${QcPrintThumb} o=${o}/>
       <span class="small">${o.style || '–'} · ${o.size}</span>
-      ${!ready.includes(o) && html`<span class="tiny amber">${!o.has_file ? 'No print file yet' : o.hold ? o.hold : o.test ? 'Test order' : 'Not paid'}</span>`}
-      <span class="row" style="gap:4px"><${PrintEye} o=${o}/><button class="btn sm ghost" onClick=${() => setOne(o)}>Check alone</button></span></div>`)}</div>
-    ${one && html`<${QcModal} o=${one} onClose=${() => setOne(null)} onDone=${onDone}/>`}
+      ${o.hold && html`<span class="tiny amber">${o.hold}</span>`}
+      ${(o.production === 'awaiting_qc' || o.manual_upload_available) && html`<button class="btn sm ghost" onClick=${() => setOne(o)}>Check alone</button>`}</div>`)}</div>
+    ${one && html`<${QcModal} o=${one} onClose=${() => setOne(null)} onDone=${id => { setOne(null); onDone(id, true); }}/>`}
   </${Modal}>`;
 }
 
-function OrderRow({ g, onQc, zip }) {
+function OrderRow({ g, onQc, onCustomer, zip, editor, onChanged }) {
   const [open, setOpen] = useState(false);
   const approved = g.items.every(o => o.qc === 'approved'), rejected = g.items.some(o => o.qc === 'rejected');
+  const status = orderFulfilment(g.items);
   return html`<tbody class=${'og' + (open ? ' open' : '')}>
     <tr class="click" onClick=${() => setOpen(o => !o)}>
       <td style="width:28px"><${Icon} n="chevr" s="14" c="og-chev"/></td>
-      <td><span class="og-thumbs">${g.items.slice(0, 3).map(o => html`<span class="thumb og-t">${repairPending(o) ? html`<span class="spinner" style="width:14px;height:14px" aria-hidden="true"></span>` : o.repair_path ? html`<${SImg} path=${o.repair_path} bucket="print-files"/>` : html`<${SImg} path=${o.thumb}/>`}</span>`)}</span></td>
+      <td><span class="og-thumbs">${g.items.slice(0, 3).map(o => html`<span class="thumb og-t">${repairPending(o) ? html`<span class="spinner" style="width:14px;height:14px" aria-hidden="true"></span>` : o.repair_path ? html`<${SImg} path=${o.repair_path} bucket="print-files"/>` : html`<${SImg} path=${o.thumb}/>`}</span>`)}${g.items.length > 3 && html`<span class="tiny dim" style="margin-left:3px" title="Additional portraits">+${g.items.length - 3}</span>`}</span></td>
       <td style="white-space:nowrap"><b class="mono og-no">${shortNo(g)}</b>${g.test ? html` <span class="tag">test</span>` : ''}${g.items.length > 1 ? html`<span class="tiny dim" style="display:block">${g.items.length} ${lang() === 'cs' ? 'portréty' : 'portraits'}</span>` : ''}</td>
       <td>${g.waiting.length ? html`<button class="btn sm primary" onClick=${e => { e.stopPropagation(); onQc(g); }}>Quality control${g.waiting.length > 1 ? html`<span> (${g.waiting.length})</span>` : ''}</button>`
-        : g.items.some(repairPending) ? html`<${RepairLoading}/>` : html`<span class=${'stamp ' + (rejected ? 'no' : approved ? 'ok' : 'wait')}>${rejected ? 'Rejected' : approved ? 'Approved' : 'Not checked'}</span>`}
+        : g.items.some(repairPending) ? html`<${RepairLoading}/>` : status ? html`<${FulfilmentBadge} status=${status}/>`
+          : html`<span class=${'stamp ' + (rejected ? 'no' : approved ? 'ok' : 'wait')}>${rejected ? 'Rejected' : approved ? 'Approved' : 'Not checked'}</span>`}
         <${SupplierZipOrder} order=${g} zip=${zip}/></td>
       <td class="small muted" style="white-space:nowrap">${fmt.date(g.at)}</td>
-      <td class="hide-m small trunc" style="max-width:260px">${g.customer || ''}${g.email ? html`<span class="tiny dim" style="display:block">${g.email}</span>` : !g.customer ? html`<span class="dim">–</span>` : ''}</td>
+      <td class="hide-m small trunc" style="max-width:260px">${g.session ? html`<button type="button" class="btn ghost sm" onClick=${e => { e.stopPropagation(); onCustomer(g.session); }}>${g.customer || g.email || 'Customer'}</button>` : g.customer || g.email || '–'}${g.customer && g.email && html`<span class="tiny dim" style="display:block">${g.email}</span>`}</td>
     </tr>
     ${open && g.items.map(o => html`<tr class="og-item">
       <td></td><td>${repairPending(o) ? '' : o.repair_path ? html`<span class="thumb og-t"><${SImg} path=${o.repair_path} bucket="print-files"/></span>` : html`<${PreviewThumb} path=${o.thumb}/>`}</td>
       <td class="small">${o.style || '–'}<span class="tiny dim" style="display:block">${o.material} ${o.size} × ${o.qty}</span></td>
-      <td><${QcCell} o=${o} onOpen=${x => onQc({ ...g, waiting: [x] })}/></td>
+      <td><${QcCell} o=${o} onOpen=${x => onQc({ ...g, selected: x })}/></td>
       <td>${!repairPending(o) && html`<${PrintEye} o=${o}/>`}</td>
-      <td class="hide-m">${o.session ? html`<a class="small" href=${'#/customers/' + o.session}>Customer</a>` : ''}</td></tr>`)}
+      <td class="hide-m">${o.session ? html`<button type="button" class="btn ghost sm" onClick=${() => onCustomer(o.session)}>Customer</button>` : ''}</td></tr>`)}
+    ${open && editor && status && status !== 'done' && html`<tr class="og-item"><td></td><td colspan="5"><${AdvanceFulfilment} orderId=${g.id} status=${status} onChanged=${onChanged}/></td></tr>`}
   </tbody>`;
 }
 
@@ -314,23 +332,29 @@ export function Orders() {
   const [filter, setFilter] = useState('all');
   const { data, error, reload, onQueued } = useRepairOrders(filter);
   const [qc, setQc] = useState(null); const [all, setAll] = useState(false); const [page, setPage] = useState(0);
+  const [customer, setCustomer] = useState(null), [internal, setInternal] = useState(new Set());
+  const loadInternal = () => rpc('admin_internal_sessions').then(rows => setInternal(new Set(rows || []))).catch(() => {});
+  const openCustomer = id => { setCustomer(id); loadInternal(); };
   const P = usePeriod();
   // the period hides older orders, but anything still waiting for quality control always stays on the list
   const groups = data ? groupOrders(data).filter(g => g.waiting.length || g.items.some(repairPending) || P.inWindow(g.at)) : [], pages = Math.max(1, Math.ceil(groups.length / PAGE));
   const rows = all ? groups.slice(page * PAGE, (page + 1) * PAGE) : groups.slice(0, PEEK);
   const waiting = groups.filter(g => g.waiting.length).length;
-  const done = id => { if (id) onQueued(id); setQc(null); reload(true); };
+  const done = (id, keepGroupOpen = false) => { if (id) onQueued(id); if (!keepGroupOpen) setQc(null); reload(true); };
+  const currentQc = qc && (groups.find(g => g.id === qc.id) || qc);
+  const single = qc?.selected || (currentQc?.items.length === 1 ? currentQc.items[0] : null);
   return html`<div class="page">
     <div class="head"><h1>Orders</h1>${waiting ? html`<span class="small muted">${waiting} to check</span>` : ''}<span class="grow"></span>
       <${Picker} groups=${[{ id: 'show', title: 'Show', value: filter, options: ORDER_FILTERS }]} onChange=${(_, v) => { setFilter(v); setPage(0); }}/></div>
     ${error && html`<div class="card red">${error.message}</div>`}
     <${SupplierZipPanel} zip=${zip} owner=${role === 'owner'}/>
-    <div class="card tbl-wrap" style="padding:0"><table class="tbl slim orders"><thead><tr><th></th><th></th><th>Order no.</th><th>Quality control</th><th>When</th><th class="hide-m">Customer</th></tr></thead>
-      ${!data ? html`<tbody><tr><td colspan="6"><${Skel} hgt="200"/></td></tr></tbody>` : rows.map(g => html`<${OrderRow} key=${g.id} g=${g} onQc=${setQc} zip=${zip}/>`)}
+    <div class="card tbl-wrap" style="padding:0"><table class="tbl slim orders"><thead><tr><th></th><th></th><th>Order no.</th><th>${lang() === 'cs' ? 'Stav' : 'Status'}</th><th>When</th><th class="hide-m">Customer</th></tr></thead>
+      ${!data ? html`<tbody><tr><td colspan="6"><${Skel} hgt="200"/></td></tr></tbody>` : rows.map(g => html`<${OrderRow} key=${g.id} g=${g} onQc=${setQc} onCustomer=${openCustomer} zip=${zip} editor=${role === 'owner' || role === 'editor'} onChanged=${() => reload(true)}/>`)}
       ${data && !groups.length && html`<tbody><tr><td colspan="6"><${Empty}>No orders yet</${Empty}></td></tr></tbody>`}</table>
       ${data && !all && groups.length > PEEK && html`<div class="more-rows"><button class="btn ghost sm" onClick=${() => setAll(true)}>Show all</button></div>`}</div>
     ${all && pages > 1 && html`<${Pager} page=${page} pages=${pages} onPage=${setPage}/>`}
-    ${qc && (qc.waiting.length === 1 ? html`<${QcModal} o=${qc.waiting[0]} onClose=${() => setQc(null)} onDone=${done}/>` : html`<${OrderQc} g=${qc} onClose=${() => setQc(null)} onDone=${done}/>`)}
+    ${currentQc && (single ? html`<${QcModal} o=${single} onClose=${() => setQc(null)} onDone=${done}/>` : html`<${OrderQc} g=${currentQc} onClose=${() => setQc(null)} onDone=${done}/>`)}
+    ${customer && html`<${SessionDrawer} key=${customer} id=${customer} isInternal=${internal.has(customer)} onInternal=${loadInternal} onClose=${() => setCustomer(null)} onChanged=${() => reload(true)}/>`}
   </div>`;
 }
 

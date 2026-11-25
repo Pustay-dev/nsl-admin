@@ -5,11 +5,13 @@ const SCALE = 100000;
 export const repairPending = o => o.repair === 'queued' || o.repair === 'processing';
 
 export async function repairOrders(filter) {
-  try { return await rpc('admin_orders_with_portrait_repair', { p_filter: filter }); }
-  catch (error) {
-    if (!/Could not find the function.*admin_orders_with_portrait_repair/i.test(error?.message ?? '')) throw error;
-    return rpc('admin_orders', { p_filter: filter });
+  for (const name of ['admin_orders_with_fulfilment', 'admin_orders_with_portrait_repair']) {
+    try { return await rpc(name, { p_filter: filter }); }
+    catch (error) {
+      if (!(error.message?.includes('Could not find the function') && error.message.includes(name))) throw error;
+    }
   }
+  return rpc('admin_orders', { p_filter: filter });
 }
 
 export function useRepairOrders(filter) {
