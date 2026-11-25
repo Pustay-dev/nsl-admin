@@ -2,6 +2,7 @@ import { html, useState, Icon, Modal, confirm } from '../ui.js';
 import { rpc } from '../api.js';
 import { toast } from '../store.js';
 import { AiName } from './ainame.js';
+import { PopularStyles } from './popular-styles.js';
 
 const slugify = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
 
@@ -57,6 +58,7 @@ export function CollectionsModal({ meta, role, onClose, onChanged }) {
   const [n, setN] = useState({ label: '', id: '', touched: false });
   const [busy, setBusy] = useState(false);
   const [openId, setOpenId] = useState(null);
+  const [popularOpen, setPopularOpen] = useState(false);
   const id = n.touched ? n.id : slugify(n.label);
   const taken = meta.collections.some(c => c.id === id);
   const count = cid => meta.styles.filter(s => s.collection === cid).length;
@@ -67,6 +69,10 @@ export function CollectionsModal({ meta, role, onClose, onChanged }) {
   };
   return html`<${Modal} title="Collections" onClose=${onClose} footer=${html`<button class="btn ghost" onClick=${onClose}>Close</button>`}>
     <div class="col" style="gap:12px;margin-top:8px">
+      <div class="card">
+        <button type="button" class="btn ghost sm" aria-expanded=${popularOpen} onClick=${() => setPopularOpen(!popularOpen)}>Populární</button>
+        ${popularOpen && html`<${PopularStyles} editable=${editable}/>`}
+      </div>
       <div class="muted small">New collections stay hidden on the website until you switch them on. Open a collection to see its styles and move them in or out.</div>
       <div>${meta.collections.map(c => html`<${Row} key=${c.id + ':' + c.label + ':' + c.enabled + ':' + c.sort} c=${c} count=${count(c.id)} editable=${editable} onChanged=${onChanged} meta=${meta} open=${openId === c.id} onToggle=${() => setOpenId(openId === c.id ? null : c.id)}/>`)}</div>
       ${editable && html`<div class="card"><h3>New collection</h3><div class="col" style="gap:8px">
