@@ -7,6 +7,7 @@ import { go } from '../router.js';
 import { SessionCooldown } from './cooldown.js';
 import { ZoomViewer } from '../zoom.js';
 import { SupplierZipOrder, SupplierZipPanel, useSupplierZip } from './supplier-zip.js';
+import { AdvanceFulfilment, FulfilmentBadge, orderFulfilment } from './order-fulfilment.js';
 import { RepairLoading, RepairRegion, repairPending, uploadQcPrint, useRepairOrders } from './portrait-repair.js';
 
 const FILTERS = [{ v: 'all', l: 'all' }, { v: 'generated', l: 'generated' }, { v: 'carts', l: 'carts' }, { v: 'orders', l: 'orders' }, { v: 'contacts', l: 'email' }, { v: 'failed', l: 'failed' }, { v: 'restricted', l: 'restricted' }, { v: 'archived', l: 'reset' }];
@@ -251,6 +252,7 @@ function QcCell({ o, onOpen }) {
   if (repairPending(o)) return html`<${RepairLoading}/>`;
   if (o.repair === 'failed' || (o.qc === 'rejected' && o.manual_upload_available)) return html`<button type="button" class="btn sm" disabled=${!o.manual_upload_available} onClick=${e => { e.stopPropagation(); onOpen(o); }}>${o.repair === 'failed' ? 'Oprava se nezdařila' : 'Rejected'} · Nahrát náhradu</button>`;
   if (o.production === 'awaiting_qc') return html`<button class="btn sm primary" onClick=${e => { e.stopPropagation(); onOpen(o); }}>Quality control</button>`;
+  if (o.fulfilment) return html`<${FulfilmentBadge} status=${o.fulfilment}/>`;
   const tone = o.qc === 'approved' ? 'ok' : o.qc === 'rejected' ? 'no' : 'wait';
   return html`<span class=${'stamp ' + tone}>${o.qc === 'approved' ? 'Approved' : o.qc === 'rejected' ? 'Rejected' : 'Not checked'}</span><div class="tiny dim">${String(o.production || '').replaceAll('_', ' ')}</div>${o.hold && html`<div class="tiny amber">${o.hold}</div>`}`;
 }
@@ -298,16 +300,18 @@ function OrderQc({ g, onClose, onDone }) {
   </${Modal}>`;
 }
 
-function OrderRow({ g, onQc, onCustomer, zip }) {
+function OrderRow({ g, onQc, onCustomer, zip, editor, onChanged }) {
   const [open, setOpen] = useState(false);
   const approved = g.items.every(o => o.qc === 'approved'), rejected = g.items.some(o => o.qc === 'rejected');
+  const status = orderFulfilment(g.items);
   return html`<tbody class=${'og' + (open ? ' open' : '')}>
     <tr class="click" onClick=${() => setOpen(o => !o)}>
       <td style="width:28px"><${Icon} n="chevr" s="14" c="og-chev"/></td>
       <td><span class="og-thumbs">${g.items.slice(0, 3).map(o => html`<span class="thumb og-t">${repairPending(o) ? html`<span class="spinner" style="width:14px;height:14px" aria-hidden="true"></span>` : o.repair_path ? html`<${SImg} path=${o.repair_path} bucket="print-files"/>` : html`<${SImg} path=${o.thumb}/>`}</span>`)}${g.items.length > 3 && html`<span class="tiny dim" style="margin-left:3px" title="Additional portraits">+${g.items.length - 3}</span>`}</span></td>
       <td style="white-space:nowrap"><b class="mono og-no">${shortNo(g)}</b>${g.test ? html` <span class="tag">test</span>` : ''}${g.items.length > 1 ? html`<span class="tiny dim" style="display:block">${g.items.length} ${lang() === 'cs' ? 'portréty' : 'portraits'}</span>` : ''}</td>
       <td>${g.waiting.length ? html`<button class="btn sm primary" onClick=${e => { e.stopPropagation(); onQc(g); }}>Quality control${g.waiting.length > 1 ? html`<span> (${g.waiting.length})</span>` : ''}</button>`
-        : g.items.some(repairPending) ? html`<${RepairLoading}/>` : html`<span class=${'stamp ' + (rejected ? 'no' : approved ? 'ok' : 'wait')}>${rejected ? 'Rejected' : approved ? 'Approved' : 'Not checked'}</span>`}
+        : g.items.some(repairPending) ? html`<${RepairLoading}/>` : status ? html`<${FulfilmentBadge} status=${status}/>`
+          : html`<span class=${'stamp ' + (rejected ? 'no' : approved ? 'ok' : 'wait')}>${rejected ? 'Rejected' : approved ? 'Approved' : 'Not checked'}</span>`}
         <${SupplierZipOrder} order=${g} zip=${zip}/></td>
       <td class="small muted" style="white-space:nowrap">${fmt.date(g.at)}</td>
       <td class="hide-m small trunc" style="max-width:260px">${g.session ? html`<button type="button" class="btn ghost sm" onClick=${e => { e.stopPropagation(); onCustomer(g.session); }}>${g.customer || g.email || 'Customer'}</button>` : g.customer || g.email || '–'}${g.customer && g.email && html`<span class="tiny dim" style="display:block">${g.email}</span>`}</td>
@@ -318,6 +322,7 @@ function OrderRow({ g, onQc, onCustomer, zip }) {
       <td><${QcCell} o=${o} onOpen=${x => onQc({ ...g, selected: x })}/></td>
       <td>${!repairPending(o) && html`<${PrintEye} o=${o}/>`}</td>
       <td class="hide-m">${o.session ? html`<button type="button" class="btn ghost sm" onClick=${() => onCustomer(o.session)}>Customer</button>` : ''}</td></tr>`)}
+    ${open && editor && status && status !== 'done' && html`<tr class="og-item"><td></td><td colspan="5"><${AdvanceFulfilment} orderId=${g.id} status=${status} onChanged=${onChanged}/></td></tr>`}
   </tbody>`;
 }
 
@@ -343,8 +348,8 @@ export function Orders() {
       <${Picker} groups=${[{ id: 'show', title: 'Show', value: filter, options: ORDER_FILTERS }]} onChange=${(_, v) => { setFilter(v); setPage(0); }}/></div>
     ${error && html`<div class="card red">${error.message}</div>`}
     <${SupplierZipPanel} zip=${zip} owner=${role === 'owner'}/>
-    <div class="card tbl-wrap" style="padding:0"><table class="tbl slim orders"><thead><tr><th></th><th></th><th>Order no.</th><th>Quality control</th><th>When</th><th class="hide-m">Customer</th></tr></thead>
-      ${!data ? html`<tbody><tr><td colspan="6"><${Skel} hgt="200"/></td></tr></tbody>` : rows.map(g => html`<${OrderRow} key=${g.id} g=${g} onQc=${setQc} onCustomer=${openCustomer} zip=${zip}/>`)}
+    <div class="card tbl-wrap" style="padding:0"><table class="tbl slim orders"><thead><tr><th></th><th></th><th>Order no.</th><th>${lang() === 'cs' ? 'Stav' : 'Status'}</th><th>When</th><th class="hide-m">Customer</th></tr></thead>
+      ${!data ? html`<tbody><tr><td colspan="6"><${Skel} hgt="200"/></td></tr></tbody>` : rows.map(g => html`<${OrderRow} key=${g.id} g=${g} onQc=${setQc} onCustomer=${openCustomer} zip=${zip} editor=${role === 'owner' || role === 'editor'} onChanged=${() => reload(true)}/>`)}
       ${data && !groups.length && html`<tbody><tr><td colspan="6"><${Empty}>No orders yet</${Empty}></td></tr></tbody>`}</table>
       ${data && !all && groups.length > PEEK && html`<div class="more-rows"><button class="btn ghost sm" onClick=${() => setAll(true)}>Show all</button></div>`}</div>
     ${all && pages > 1 && html`<${Pager} page=${page} pages=${pages} onPage=${setPage}/>`}
