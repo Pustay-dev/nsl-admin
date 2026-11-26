@@ -35,7 +35,7 @@ export function SupplierZipOrder({ order, zip }) {
     setBusy(true);
     try {
       const ok = await confirm({
-        title: t('Zařadit objednávku do nočního ZIPu?', 'Queue this order for the nightly ZIP?'),
+        title: t('Zařadit objednávku k okamžitému odeslání?', 'Queue this order for immediate handoff?'),
         body: t('Zařaďte jen objednávku, která ještě nebyla předána k tisku. Všechny její portréty se odešlou společně.',
           'Only queue a new order that has not been handed to the printer. All its portraits go together.'),
         ok: t('Zařadit do dávky', 'Queue for batch'),
@@ -43,7 +43,7 @@ export function SupplierZipOrder({ order, zip }) {
       if (!ok) return;
       const [item] = order.items;
       await rpc('admin_mail_queue_supplier_zip', { p_item: item.id, p_revision: item.revision });
-      toast(t('Objednávka zařazená do nočního ZIPu', 'Order queued for the nightly ZIP'));
+      toast(t('Objednávka zařazená k okamžitému odeslání', 'Order queued for immediate handoff'));
       zip.outbox.reload(true);
     } catch (error) { toast(error.message, 'warn', 7000); }
     finally { setBusy(false); }
@@ -82,8 +82,8 @@ export function SupplierZipPanel({ zip, owner }) {
   const toggle = async () => {
     const enable = !settings.supplier_zip_enabled;
     const ok = await confirm({
-      title: enable ? t('Povolit noční ZIP?', 'Enable the nightly ZIP?') : t('Pozastavit noční ZIP?', 'Pause the nightly ZIP?'),
-      body: enable ? t('Zařazené objednávky půjdou v 01:00 na ', 'Queued orders will go at 01:00 to ') + settings.supplier_email + '.'
+      title: enable ? t('Zapnout automatické odesílání?', 'Enable automatic handoff?') : t('Pozastavit automatické odesílání?', 'Pause automatic handoff?'),
+      body: enable ? t('Schválené objednávky se budou odesílat po jedné na ', 'Approved orders will be sent one at a time to ') + settings.supplier_email + '.'
         : t('Zařazené objednávky zůstanou ve frontě.', 'Queued orders will wait in the outbox.'),
       ok: enable ? t('Povolit', 'Enable') : t('Pozastavit', 'Pause'), danger: enable,
     });
@@ -103,7 +103,7 @@ export function SupplierZipPanel({ zip, owner }) {
   };
   return html`<details class="card" style="padding:10px 14px;margin-bottom:12px">
     <summary style="cursor:pointer"><b>${t('Noční ZIP pro KvikTisk', 'Nightly KvikTisk ZIP')}</b>
-      <span class="tiny dim"> · 01:00 · ${settings.supplier_zip_enabled && settings.sending_enabled ? t('povoleno', 'enabled') : t('pozastaveno', 'paused')}</span>
+      <span class="tiny dim"> · ${t('po kontrole', 'after QC')} · ${settings.supplier_zip_enabled && settings.sending_enabled ? t('povoleno', 'enabled') : t('pozastaveno', 'paused')}</span>
       ${rows.length > 0 && html`<span class="tiny amber"> · ${rows.length} ${t('ke kontrole', 'to check')}</span>`}
     </summary>
     <div class="col" style="gap:8px;margin-top:12px">
@@ -120,7 +120,7 @@ export function SupplierZipPanel({ zip, owner }) {
         </button>
       </form>`}
       ${owner && needsRedirect && html`<span class="small amber">${t('Pro uložení adres vyplňte testovací e-mail.', 'Enter a test email to save the addresses.')}</span>`}
-      ${owner && settings.redirect_enabled && html`<span class="small dim">${t('Noční ZIP se posílá na adresu tiskárny. Testovací přesměrování platí pro ostatní automatické e-maily.', 'The nightly ZIP goes to the printer address. Test redirect applies to other automated emails.')}</span>`}
+      ${owner && settings.redirect_enabled && html`<span class="small dim">${t('ZIP s objednávkou se posílá na adresu tiskárny. Testovací přesměrování platí pro ostatní automatické e-maily.', 'The order ZIP goes to the printer address. Test redirect applies to other automated emails.')}</span>`}
       ${zip.outbox.error && html`<span class="small amber">${t('Frontu se nepodařilo načíst.', 'Could not load the ZIP outbox.')}</span>`}
       ${rows.map(row => html`<div key=${row.id} class="row wrap" style="gap:8px">
         <span class="grow small">${row.subject} · ${row.supplier_zip_batch_id?.slice(0, 8) || '—'} · ${row.error_code || '—'}</span>
