@@ -174,7 +174,7 @@ function QcModal({ o, onClose, onDone }) {
   const input = useRef(null);
   const editor = useStore(s => s.role === 'owner' || s.role === 'editor');
   const pf = usePrintFile(o); const [zoom, setZoom] = useState(false);
-  const editing = rej && o.repair_available;
+  const editing = rej && !o.test && o.repair_available;
   const run = async action => {
     setBusy(true);
     try {
@@ -183,7 +183,7 @@ function QcModal({ o, onClose, onDone }) {
         toast('Oprava zařazena'); onDone(o.id); return;
       }
       await rpc('admin_order_qc', { p_item: o.id, p_revision: o.revision, p_action: action, p_note: note });
-      toast(action === 'reject' ? 'Rejected: order blocked' : 'Approved: ready to print');
+      toast(action === 'reject' ? 'Rejected: order blocked' : 'Kontrola dokončena');
       onDone();
     } catch (e) { toast(qcMsg(e), 'warn', 6000); } finally { setBusy(false); }
   };
@@ -196,7 +196,7 @@ function QcModal({ o, onClose, onDone }) {
     catch (error) { toast(qcMsg(error), 'warn', 6000); }
     finally { setUploading(false); }
   };
-  const checks = [[!!o.has_file, 'Print file stored'], [o.payment === 'paid', 'Paid'], [!o.hold, 'No production hold'], [!o.test, 'Real order (not a test)']];
+  const checks = [[!!o.has_file, 'Print file stored'], [o.payment === 'paid', 'Paid'], [!o.hold, 'No production hold'], [typeof o.test === 'boolean', o.test ? 'Testovací objednávka · ZIP do interní schránky' : 'Typ objednávky ověřen']];
   const hasPrint = !!pf.url;
   const saving = uploading || busy;
   const canReview = editor && o.production === 'awaiting_qc';
@@ -208,7 +208,7 @@ function QcModal({ o, onClose, onDone }) {
     <div class="row" style="gap:14px;align-items:flex-start">
       <div class="col" style="gap:4px"><div><b>${o.style || '–'}</b></div><div class="small">${o.material} ${o.size} × ${o.qty}</div><div class="tiny dim">revision ${o.revision}</div>
         <div class="col" style="gap:3px;margin-top:6px">${checks.map(([ok, l]) => html`<div class=${'small ' + (ok ? 'acid' : 'red')}>${ok ? '✓' : '✕'} ${l}</div>`)}</div></div></div>
-    <div class="tiny dim" style="margin-top:12px">Approving marks the print file as checked and moves the order to <b>ready to print</b>.</div>
+    <div class="tiny dim" style="margin-top:12px">${o.test ? 'Po schválení všech portrétů přijde testovací ZIP do interní schránky.' : 'Po schválení všech portrétů se objednávka předá do KvikTisku.'}</div>
     <div class="row wrap" style="gap:8px;margin-top:10px;align-items:flex-end">
       ${canReview && html`<label class="f grow">${editing ? 'Co má AI opravit?' : rej ? 'Why is it rejected? (required)' : 'Note (optional)'}<input class="in" maxlength="2000" value=${note} onInput=${e => setNote(e.target.value)}/></label>`}
       ${editor && o.manual_upload_available && html`<input ref=${input} type="file" accept=${o.manual_png_available ? 'image/jpeg,image/png,.jpg,.jpeg,.png' : 'image/jpeg,.jpg,.jpeg'} hidden onChange=${upload}/>
@@ -283,11 +283,11 @@ function QcPrintThumb({ o }) {
 
 function OrderQc({ g, onClose, onDone }) {
   const [busy, setBusy] = useState(false), [one, setOne] = useState(null);
-  const ready = g.waiting.filter(o => o.has_file && o.payment === 'paid' && !o.hold && !o.test);
+  const ready = g.waiting.filter(o => o.has_file && o.payment === 'paid' && !o.hold && typeof o.test === 'boolean');
   const approveAll = async () => {
     setBusy(true); let ok = 0;
     for (const o of ready) { try { await rpc('admin_order_qc', { p_item: o.id, p_revision: o.revision, p_action: 'approve', p_note: '' }); ok++; } catch (e) { toast(qcMsg(e), 'warn', 6000); } }
-    setBusy(false); toast(ok + ' / ' + ready.length + ' approved: ready to print'); onDone();
+    setBusy(false); toast(ok + ' / ' + ready.length + ' zkontrolováno'); onDone();
   };
   return html`<${Modal} title=${'Quality control · ' + shortNo(g)} onClose=${onClose} cls="qc-all" footer=${html`<button class="btn lg ghost" onClick=${onClose}>Cancel</button>
       <button class="btn lg primary" disabled=${busy || !ready.length} onClick=${approveAll}>${busy ? 'Approving…' : html`<span>Approve all</span> <span>(${ready.length})</span>`}</button>`}>
@@ -331,6 +331,13 @@ export function Orders() {
   const zip = useSupplierZip(role);
   const [filter, setFilter] = useState('all');
   const { data, error, reload, onQueued } = useRepairOrders(filter);
+  const [watchHandoffUntil, setWatchHandoffUntil] = useState(0);
+  usePoll(() => {
+    if (Date.now() < watchHandoffUntil || zip.rows.some(row => row.status === 'queued' || row.status === 'leased')) {
+      reload(true);
+      if (zip.installed) zip.outbox.reload(true);
+    }
+  }, 3000);
   const [qc, setQc] = useState(null); const [all, setAll] = useState(false); const [page, setPage] = useState(0);
   const [customer, setCustomer] = useState(null), [internal, setInternal] = useState(new Set());
   const loadInternal = () => rpc('admin_internal_sessions').then(rows => setInternal(new Set(rows || []))).catch(() => {});
@@ -340,7 +347,12 @@ export function Orders() {
   const groups = data ? groupOrders(data).filter(g => g.waiting.length || g.items.some(repairPending) || P.inWindow(g.at)) : [], pages = Math.max(1, Math.ceil(groups.length / PAGE));
   const rows = all ? groups.slice(page * PAGE, (page + 1) * PAGE) : groups.slice(0, PEEK);
   const waiting = groups.filter(g => g.waiting.length).length;
-  const done = (id, keepGroupOpen = false) => { if (id) onQueued(id); if (!keepGroupOpen) setQc(null); reload(true); };
+  const done = (id, keepGroupOpen = false) => {
+    if (id) onQueued(id);
+    else setWatchHandoffUntil(Date.now() + 90_000);
+    if (!keepGroupOpen) setQc(null);
+    reload(true);
+  };
   const currentQc = qc && (groups.find(g => g.id === qc.id) || qc);
   const single = qc?.selected || (currentQc?.items.length === 1 ? currentQc.items[0] : null);
   return html`<div class="page">
