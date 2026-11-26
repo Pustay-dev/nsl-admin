@@ -167,7 +167,9 @@ function QcPrintButton({ src, onClick, compact = false }) {
     onClick=${onClick} aria-label="Zvětšit tiskový soubor"><img src=${src} alt="Tiskový soubor" style="display:block;max-width:100%;max-height:52vh;width:auto;height:auto;object-fit:contain"/></button>`;
 }
 
-// Quality control: look at the order, then approve (-> ready to print; the team sends it to Kviktisk by hand) or reject (-> blocked, with a reason).
+const sendZipStyle = 'background:#1d4ed8;border-color:#1d4ed8;color:#fff';
+const canApprovePrint = o => o.has_file && o.payment === 'paid' && !o.hold && typeof o.test === 'boolean';
+const approvePrint = o => rpc('admin_order_qc', { p_item: o.id, p_revision: o.revision, p_action: 'approve', p_note: '' });
 function QcModal({ o, onClose, onDone }) {
   const [note, setNote] = useState(''); const [busy, setBusy] = useState(false); const [rej, setRej] = useState(false);
   const [region, setRegion] = useState(null), [uploading, setUploading] = useState(false);
@@ -202,13 +204,13 @@ function QcModal({ o, onClose, onDone }) {
   const canReview = editor && o.production === 'awaiting_qc';
   return html`<${Modal} title=${'Quality control · #' + o.shopify_order_id} onClose=${saving ? () => {} : onClose} footer=${html`<button class="btn" onClick=${onClose} disabled=${saving}>Cancel</button>
     ${canReview && html`<button class="btn danger" disabled=${saving || (rej && (!note.trim() || (editing && !region)))} onClick=${() => (rej ? run('reject') : setRej(true))}>${editing ? 'Zamítnout a opravit' : rej ? 'Confirm reject' : 'Reject'}</button>
-      <button class="btn primary" disabled=${saving || rej || !hasPrint || !checks.every(c => c[0])} onClick=${() => run('approve')}>Approve</button>`}` }>
+      <button class="btn primary" style=${sendZipStyle} disabled=${saving || rej || !hasPrint || !checks.every(c => c[0])} onClick=${() => run('approve')}>${o.review_only ? 'Potvrdit opětovnou kontrolu' : 'Odeslat KvikTisku'}</button>`}` }>
     ${editing ? (busy ? html`<${RepairLoading}/>` : hasPrint ? html`<${RepairRegion} src=${pf.url} region=${region} onChange=${setRegion}/>` : html`<span class="small">${pf.loading ? 'Načítám tiskový soubor…' : 'Tiskový soubor se nepodařilo načíst.'}</span>`) : html`<div class="col" style="gap:8px;margin-bottom:12px">
       ${pf.loading ? html`<span class="small" role="status">Načítám tiskový soubor…</span>` : hasPrint ? html`<${QcPrintButton} src=${pf.url} onClick=${() => setZoom(true)}/>` : html`<span class="small amber">${o.has_file ? 'Tiskový soubor se nepodařilo načíst.' : 'Tiskový soubor zatím není k dispozici.'}</span>`}</div>`}
     <div class="row" style="gap:14px;align-items:flex-start">
       <div class="col" style="gap:4px"><div><b>${o.style || '–'}</b></div><div class="small">${o.material} ${o.size} × ${o.qty}</div><div class="tiny dim">revision ${o.revision}</div>
         <div class="col" style="gap:3px;margin-top:6px">${checks.map(([ok, l]) => html`<div class=${'small ' + (ok ? 'acid' : 'red')}>${ok ? '✓' : '✕'} ${l}</div>`)}</div></div></div>
-    <div class="tiny dim" style="margin-top:12px">${o.test ? 'Po schválení všech portrétů přijde testovací ZIP do interní schránky.' : 'Po schválení všech portrétů se objednávka předá do KvikTisku.'}</div>
+    <div class="tiny dim" style="margin-top:12px">${o.review_only ? 'Potvrzením se uzavře opětovná kontrola. Předchozí odeslání zůstane v historii.' : o.test ? 'Po schválení všech portrétů přijde testovací ZIP do interní schránky.' : 'Po schválení všech portrétů se zařadí ZIP objednávky k odeslání.'}</div>
     <div class="row wrap" style="gap:8px;margin-top:10px;align-items:flex-end">
       ${canReview && html`<label class="f grow">${editing ? 'Co má AI opravit?' : rej ? 'Why is it rejected? (required)' : 'Note (optional)'}<input class="in" maxlength="2000" value=${note} onInput=${e => setNote(e.target.value)}/></label>`}
       ${editor && o.manual_upload_available && html`<input ref=${input} type="file" accept=${o.manual_png_available ? 'image/jpeg,image/png,.jpg,.jpeg,.png' : 'image/jpeg,.jpg,.jpeg'} hidden onChange=${upload}/>
@@ -283,14 +285,14 @@ function QcPrintThumb({ o }) {
 
 function OrderQc({ g, onClose, onDone }) {
   const [busy, setBusy] = useState(false), [one, setOne] = useState(null);
-  const ready = g.waiting.filter(o => o.has_file && o.payment === 'paid' && !o.hold && typeof o.test === 'boolean');
+  const ready = g.waiting.filter(canApprovePrint);
   const approveAll = async () => {
     setBusy(true); let ok = 0;
-    for (const o of ready) { try { await rpc('admin_order_qc', { p_item: o.id, p_revision: o.revision, p_action: 'approve', p_note: '' }); ok++; } catch (e) { toast(qcMsg(e), 'warn', 6000); } }
+    for (const o of ready) { try { await approvePrint(o); ok++; } catch (e) { toast(qcMsg(e), 'warn', 6000); } }
     setBusy(false); toast(ok + ' / ' + ready.length + ' zkontrolováno'); onDone();
   };
   return html`<${Modal} title=${'Quality control · ' + shortNo(g)} onClose=${onClose} cls="qc-all" footer=${html`<button class="btn lg ghost" onClick=${onClose}>Cancel</button>
-      <button class="btn lg primary" disabled=${busy || !ready.length} onClick=${approveAll}>${busy ? 'Approving…' : html`<span>Approve all</span> <span>(${ready.length})</span>`}</button>`}>
+      <button class="btn lg primary" style=${sendZipStyle} disabled=${busy || !ready.length} onClick=${approveAll}>${busy ? 'Zpracovávám…' : (ready.every(o => o.review_only) ? 'Potvrdit opětovnou kontrolu' : 'Odeslat KvikTisku')} (${ready.length})</button>`}>
     <div class="qc-grid">${g.items.map(o => html`<div class="qc-item" key=${o.id}>
       <${QcPrintThumb} o=${o}/>
       <span class="small">${o.style || '–'} · ${o.size}</span>
@@ -332,6 +334,39 @@ export function Orders() {
   const [filter, setFilter] = useState('all');
   const { data, error, reload, onQueued } = useRepairOrders(filter);
   const [watchHandoffUntil, setWatchHandoffUntil] = useState(0);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const editor = role === 'owner' || role === 'editor';
+  const sendAll = async () => {
+    setBulkBusy(true);
+    try {
+      const candidates = groupOrders(await rpc('admin_orders_with_fulfilment', { p_filter: 'all' }))
+        .filter(g => g.waiting.length && g.items.every(o => !o.review_only && canApprovePrint(o) &&
+          (o.production === 'awaiting_qc' || (o.production === 'ready_to_print' && o.qc === 'approved'))));
+      if (!candidates.length) { toast('Žádná kompletní objednávka nečeká na odeslání.'); return; }
+      const numbers = candidates.map(shortNo).join(', ');
+      if (!await confirm({
+        title: 'Odeslat všechny objednávky ke kontrole?',
+        body: 'Potvrdíte tiskové soubory objednávek ' + numbers + '. Každá půjde v samostatném ZIPu.',
+        ok: 'Odeslat VŠE',
+      })) return;
+
+      const failures = [];
+      let checked = 0;
+      for (const order of candidates) {
+        try {
+          for (const item of order.waiting) await approvePrint(item);
+          checked++;
+        } catch (error) { failures.push(shortNo(order) + ' · ' + qcMsg(error)); }
+      }
+      toast('Kontrola potvrzena u ' + checked + ' z ' + candidates.length + ' objednávek.');
+      if (failures.length) toast(failures.join(' | '), 'warn', 10000);
+    } catch (error) { toast(qcMsg(error), 'warn', 6000); }
+    finally {
+      setBulkBusy(false);
+      setWatchHandoffUntil(Date.now() + 90_000);
+      reload(true);
+    }
+  };
   usePoll(() => {
     if (Date.now() < watchHandoffUntil || zip.rows.some(row => row.status === 'queued' || row.status === 'leased')) {
       reload(true);
@@ -357,11 +392,12 @@ export function Orders() {
   const single = qc?.selected || (currentQc?.items.length === 1 ? currentQc.items[0] : null);
   return html`<div class="page">
     <div class="head"><h1>Orders</h1>${waiting ? html`<span class="small muted">${waiting} to check</span>` : ''}<span class="grow"></span>
+      ${editor && html`<button class="btn primary" style=${sendZipStyle} disabled=${bulkBusy || !zip.settings.data?.supplier_zip_enabled || !zip.settings.data?.sending_enabled} onClick=${sendAll}>${bulkBusy ? 'Zpracovávám…' : 'Odeslat VŠE'}</button>`}
       <${Picker} groups=${[{ id: 'show', title: 'Show', value: filter, options: ORDER_FILTERS }]} onChange=${(_, v) => { setFilter(v); setPage(0); }}/></div>
     ${error && html`<div class="card red">${error.message}</div>`}
     <${SupplierZipPanel} zip=${zip} owner=${role === 'owner'}/>
     <div class="card tbl-wrap" style="padding:0"><table class="tbl slim orders"><thead><tr><th></th><th></th><th>Order no.</th><th>${lang() === 'cs' ? 'Stav' : 'Status'}</th><th>When</th><th class="hide-m">Customer</th></tr></thead>
-      ${!data ? html`<tbody><tr><td colspan="6"><${Skel} hgt="200"/></td></tr></tbody>` : rows.map(g => html`<${OrderRow} key=${g.id} g=${g} onQc=${setQc} onCustomer=${openCustomer} zip=${zip} editor=${role === 'owner' || role === 'editor'} onChanged=${() => reload(true)}/>`)}
+      ${!data ? html`<tbody><tr><td colspan="6"><${Skel} hgt="200"/></td></tr></tbody>` : rows.map(g => html`<${OrderRow} key=${g.id} g=${g} onQc=${setQc} onCustomer=${openCustomer} zip=${zip} editor=${editor} onChanged=${() => reload(true)}/>`)}
       ${data && !groups.length && html`<tbody><tr><td colspan="6"><${Empty}>No orders yet</${Empty}></td></tr></tbody>`}</table>
       ${data && !all && groups.length > PEEK && html`<div class="more-rows"><button class="btn ghost sm" onClick=${() => setAll(true)}>Show all</button></div>`}</div>
     ${all && pages > 1 && html`<${Pager} page=${page} pages=${pages} onPage=${setPage}/>`}
