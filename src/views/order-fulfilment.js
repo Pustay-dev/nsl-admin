@@ -5,8 +5,8 @@ import { toast } from '../store.js';
 
 const statuses = ['approved', 'sent', 'handed_to_dls', 'done'];
 const labels = {
-  approved: ['Schváleno', 'Approved'],
-  sent: ['Odesláno', 'Sent'],
+  approved: ['Čeká na odeslání', 'Awaiting print handoff'],
+  sent: ['Odesláno KvikTisku', 'Sent to KvikTisk'],
   handed_to_dls: ['Předáno DLS', 'Handed to DLS'],
   done: ['Hotovo', 'Done'],
 };
@@ -19,13 +19,15 @@ export function orderFulfilment(items) {
 }
 
 export function FulfilmentBadge({ status }) {
-  return html`<span class="stamp ok">${t(...labels[status])}</span>`;
+  const sent = status === 'sent' || status === 'handed_to_dls';
+  const color = sent ? 'background:#dbeafe;color:#1e40af;border-color:#93c5fd' : '';
+  return html`<span class=${status === 'done' ? 'stamp ok' : 'stamp'} style=${color}>${t(...labels[status])}</span>`;
 }
 
 export function AdvanceFulfilment({ orderId, status, onChanged }) {
   const [busy, setBusy] = useState(false);
   const next = statuses[statuses.indexOf(status) + 1];
-  if (!status || !next) return null;
+  if (!status || status === 'approved' || !next) return null;
   const label = t(...labels[next]);
   const advance = async () => {
     setBusy(true);
