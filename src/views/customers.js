@@ -300,7 +300,33 @@ function OrderQc({ g, onClose, onDone }) {
   </${Modal}>`;
 }
 
-function OrderRow({ g, onQc, onCustomer, zip, editor, onChanged }) {
+function ExpressKvikButton({ item, editor, reload }) {
+  const [busy, setBusy] = useState(false);
+  if (!item) return null;
+  const labels = {
+    ready: 'Odeslat ihned do KvikTisku', submitted: 'Předáno do tisku',
+    sending: 'Probíhá odesílání', needs_review: 'Ověřte stav v Mail → Outbox',
+    paused: 'Odesílání ZIP je vypnuté', not_ready: 'Čeká na schválené podklady',
+  };
+  const label = busy ? labels.sending : labels[item.status];
+  const dispatch = async e => {
+    e.stopPropagation();
+    setBusy(true);
+    try {
+      const result = await fn('admin-supplier-express', { item: item.item, revision: item.revision });
+      if (result.wake === 'accepted') toast('Expresní předání spuštěno.');
+      else toast('Objednávka je ve frontě. Spuštění odesílače se nepodařilo potvrdit.', 'warn', 6500);
+    } catch (e) {
+      toast('Expresní předání se nepodařilo potvrdit. ' + (e.message || ''), 'warn', 6500);
+    } finally {
+      await reload(true);
+      setBusy(false);
+    }
+  };
+  return html`<span title=${label} style="margin-left:3px"><button class="btn ghost sm" type="button" aria-label=${label}
+    disabled=${!editor || busy || item.status !== 'ready'} onClick=${dispatch}>⚡</button></span>`;
+}
+function OrderRow({ g, onQc, onCustomer, zip, editor, onChanged, express, reloadExpress }) {
   const [open, setOpen] = useState(false);
   const approved = g.items.every(o => o.qc === 'approved'), rejected = g.items.some(o => o.qc === 'rejected');
   const status = orderFulfilment(g.items);
@@ -308,7 +334,7 @@ function OrderRow({ g, onQc, onCustomer, zip, editor, onChanged }) {
     <tr class="click" onClick=${() => setOpen(o => !o)}>
       <td style="width:28px"><${Icon} n="chevr" s="14" c="og-chev"/></td>
       <td><span class="og-thumbs">${g.items.slice(0, 3).map(o => html`<span class="thumb og-t">${repairPending(o) ? html`<span class="spinner" style="width:14px;height:14px" aria-hidden="true"></span>` : o.repair_path ? html`<${SImg} path=${o.repair_path} bucket="print-files"/>` : html`<${SImg} path=${o.thumb}/>`}</span>`)}${g.items.length > 3 && html`<span class="tiny dim" style="margin-left:3px" title="Additional portraits">+${g.items.length - 3}</span>`}</span></td>
-      <td style="white-space:nowrap"><b class="mono og-no">${shortNo(g)}</b>${g.test ? html` <span class="tag">test</span>` : ''}${g.items.length > 1 ? html`<span class="tiny dim" style="display:block">${g.items.length} ${lang() === 'cs' ? 'portréty' : 'portraits'}</span>` : ''}</td>
+      <td style="white-space:nowrap"><b class="mono og-no">${shortNo(g)}</b><${ExpressKvikButton} item=${express} editor=${editor} reload=${reloadExpress}/>${g.test ? html` <span class="tag">test</span>` : ''}${g.items.length > 1 ? html`<span class="tiny dim" style="display:block">${g.items.length} ${lang() === 'cs' ? 'portréty' : 'portraits'}</span>` : ''}</td>
       <td>${g.waiting.length ? html`<button class="btn sm primary" onClick=${e => { e.stopPropagation(); onQc(g); }}>Quality control${g.waiting.length > 1 ? html`<span> (${g.waiting.length})</span>` : ''}</button>`
         : g.items.some(repairPending) ? html`<${RepairLoading}/>` : status ? html`<${FulfilmentBadge} status=${status}/>`
           : html`<span class=${'stamp ' + (rejected ? 'no' : approved ? 'ok' : 'wait')}>${rejected ? 'Rejected' : approved ? 'Approved' : 'Not checked'}</span>`}
@@ -329,6 +355,9 @@ function OrderRow({ g, onQc, onCustomer, zip, editor, onChanged }) {
 export function Orders() {
   const role = useStore(s => s.role);
   const zip = useSupplierZip(role);
+  const { data: express, reload: reloadExpress } = useLoad(() => rpc('admin_express_supplier_orders'), []);
+  usePoll(() => reloadExpress(true), 10000);
+  const expressByOrder = new Map((express || []).map(item => [item.shopify_order, item]));
   const [filter, setFilter] = useState('all');
   const { data, error, reload, onQueued } = useRepairOrders(filter);
   const [qc, setQc] = useState(null); const [all, setAll] = useState(false); const [page, setPage] = useState(0);
@@ -349,7 +378,7 @@ export function Orders() {
     ${error && html`<div class="card red">${error.message}</div>`}
     <${SupplierZipPanel} zip=${zip} owner=${role === 'owner'}/>
     <div class="card tbl-wrap" style="padding:0"><table class="tbl slim orders"><thead><tr><th></th><th></th><th>Order no.</th><th>${lang() === 'cs' ? 'Stav' : 'Status'}</th><th>When</th><th class="hide-m">Customer</th></tr></thead>
-      ${!data ? html`<tbody><tr><td colspan="6"><${Skel} hgt="200"/></td></tr></tbody>` : rows.map(g => html`<${OrderRow} key=${g.id} g=${g} onQc=${setQc} onCustomer=${openCustomer} zip=${zip} editor=${role === 'owner' || role === 'editor'} onChanged=${() => reload(true)}/>`)}
+      ${!data ? html`<tbody><tr><td colspan="6"><${Skel} hgt="200"/></td></tr></tbody>` : rows.map(g => html`<${OrderRow} key=${g.id} g=${g} onQc=${setQc} onCustomer=${openCustomer} zip=${zip} editor=${role === 'owner' || role === 'editor'} express=${expressByOrder.get(String(g.id))} reloadExpress=${reloadExpress} onChanged=${() => reload(true)}/>`)}
       ${data && !groups.length && html`<tbody><tr><td colspan="6"><${Empty}>No orders yet</${Empty}></td></tr></tbody>`}</table>
       ${data && !all && groups.length > PEEK && html`<div class="more-rows"><button class="btn ghost sm" onClick=${() => setAll(true)}>Show all</button></div>`}</div>
     ${all && pages > 1 && html`<${Pager} page=${page} pages=${pages} onPage=${setPage}/>`}
