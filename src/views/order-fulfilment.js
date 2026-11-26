@@ -6,7 +6,7 @@ import { toast } from '../store.js';
 const statuses = ['approved', 'sent', 'handed_to_dls', 'done'];
 const labels = {
   approved: ['Čeká na odeslání', 'Awaiting print handoff'],
-  sent: ['Odesláno', 'Sent'],
+  sent: ['Odesláno KvikTisku', 'Sent to KvikTisk'],
   handed_to_dls: ['Předáno DLS', 'Handed to DLS'],
   done: ['Hotovo', 'Done'],
 };
