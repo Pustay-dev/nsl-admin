@@ -81,9 +81,10 @@ export function SupplierZipPanel({ zip, owner }) {
   };
   const toggle = async () => {
     const enable = !settings.supplier_zip_enabled;
+    const destination = settings.supplier_zip_handoff_to || settings.supplier_email;
     const ok = await confirm({
       title: enable ? t('Zapnout automatické odesílání?', 'Enable automatic handoff?') : t('Pozastavit automatické odesílání?', 'Pause automatic handoff?'),
-      body: enable ? t('Schválené objednávky se budou odesílat po jedné na ', 'Approved orders will be sent one at a time to ') + settings.supplier_email + '.'
+      body: enable ? t('Schválené objednávky se budou odesílat po jedné na ', 'Approved orders will be sent one at a time to ') + destination + '.'
         : t('Zařazené objednávky zůstanou ve frontě.', 'Queued orders will wait in the outbox.'),
       ok: enable ? t('Povolit', 'Enable') : t('Pozastavit', 'Pause'), danger: enable,
     });
@@ -95,18 +96,19 @@ export function SupplierZipPanel({ zip, owner }) {
       title: sent ? t('Potvrdit odeslání položky?', 'Confirm this line was sent?') : t('Znovu zařadit položku?', 'Requeue this line?'),
       body: sent
         ? t('Potvrďte až po ověření, že předchozí ZIP odešel.', 'Confirm after verifying the previous ZIP was sent.')
-        : t('Pokračujte po ověření, že KvikTisk předchozí ZIP nedostal. U vícepoložkové objednávky znovu zařaďte všechny položky.',
-          'Continue after verifying KvikTisk did not receive the ZIP. Requeue every line in a multi-line order.'),
+        : t('Pokračujte po ověření, že příjemce předchozí ZIP nedostal. U vícepoložkové objednávky znovu zařaďte všechny položky.',
+          'Continue after verifying the recipient did not receive the ZIP. Requeue every line in a multi-line order.'),
       ok: sent ? t('Potvrdit odeslání', 'Confirm delivery') : t('Znovu zařadit', 'Requeue'), danger: true,
     });
     if (ok) await act(() => rpc('admin_mail_outbox_resolve', { p_id: row.id, p_action: action }), zip.outbox.reload);
   };
   return html`<details class="card" style="padding:10px 14px;margin-bottom:12px">
-    <summary style="cursor:pointer"><b>${t('Noční ZIP pro KvikTisk', 'Nightly KvikTisk ZIP')}</b>
+    <summary style="cursor:pointer"><b>${t('Předání do KvikTisku', 'KvikTisk handoff')}</b>
       <span class="tiny dim"> · ${t('po kontrole', 'after QC')} · ${settings.supplier_zip_enabled && settings.sending_enabled ? t('povoleno', 'enabled') : t('pozastaveno', 'paused')}</span>
       ${rows.length > 0 && html`<span class="tiny amber"> · ${rows.length} ${t('ke kontrole', 'to check')}</span>`}
     </summary>
     <div class="col" style="gap:8px;margin-top:12px">
+      ${settings.supplier_zip_handoff_to && html`<span class="small dim">${t('Dočasný příjemce ZIPů po kontrole', 'Temporary ZIP recipient after QC')} · <strong>${settings.supplier_zip_handoff_to}</strong></span>`}
       ${owner && html`<form class="row wrap" style="gap:8px" onSubmit=${saveAddress}>
         <label class="f">${t('Adresa tiskárny', 'Printer email')}
           <input class="in" type="email" placeholder="hesoun@kviktisk.cz" value=${address ?? settings.supplier_email ?? ''} onInput=${e => setAddress(e.target.value)} disabled=${busy || settings.supplier_zip_enabled}/>
@@ -120,7 +122,7 @@ export function SupplierZipPanel({ zip, owner }) {
         </button>
       </form>`}
       ${owner && needsRedirect && html`<span class="small amber">${t('Pro uložení adres vyplňte testovací e-mail.', 'Enter a test email to save the addresses.')}</span>`}
-      ${owner && settings.redirect_enabled && html`<span class="small dim">${t('ZIP s objednávkou se posílá na adresu tiskárny. Testovací přesměrování platí pro ostatní automatické e-maily.', 'The order ZIP goes to the printer address. Test redirect applies to other automated emails.')}</span>`}
+      ${owner && settings.redirect_enabled && html`<span class="small dim">${t('Testovací objednávky používají testovací e-mail.', 'Shopify test orders use the test email.')}</span>`}
       ${zip.outbox.error && html`<span class="small amber">${t('Frontu se nepodařilo načíst.', 'Could not load the ZIP outbox.')}</span>`}
       ${rows.map(row => html`<div key=${row.id} class="row wrap" style="gap:8px">
         <span class="grow small">${row.subject} · ${row.supplier_zip_batch_id?.slice(0, 8) || '—'} · ${row.error_code || '—'}</span>
