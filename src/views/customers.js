@@ -8,6 +8,7 @@ import { SessionCooldown } from './cooldown.js';
 import { ZoomViewer } from '../zoom.js';
 import { SupplierZipOrder, SupplierZipPanel, useSupplierZip } from './supplier-zip.js';
 import { AdvanceFulfilment, FulfilmentBadge, orderFulfilment } from './order-fulfilment.js';
+import { AutoDispatchPanel, AutoDispatchTag, ShopifySyncProblems, TrackingReviewPanel, useAutoDispatch } from './fulfilment-automation.js';
 import { RepairLoading, RepairRegion, repairPending, uploadQcPrint, useRepairOrders } from './portrait-repair.js';
 
 const FILTERS = [{ v: 'all', l: 'all' }, { v: 'generated', l: 'generated' }, { v: 'carts', l: 'carts' }, { v: 'orders', l: 'orders' }, { v: 'contacts', l: 'email' }, { v: 'failed', l: 'failed' }, { v: 'restricted', l: 'restricted' }, { v: 'archived', l: 'reset' }];
@@ -302,7 +303,7 @@ function OrderQc({ g, onClose, onDone }) {
   </${Modal}>`;
 }
 
-function OrderRow({ g, onQc, onCustomer, zip, editor, onChanged }) {
+function OrderRow({ g, onQc, onCustomer, zip, editor, onChanged, pending }) {
   const [open, setOpen] = useState(false);
   const approved = g.items.every(o => o.qc === 'approved'), rejected = g.items.some(o => o.qc === 'rejected');
   const status = orderFulfilment(g.items);
@@ -314,7 +315,7 @@ function OrderRow({ g, onQc, onCustomer, zip, editor, onChanged }) {
       <td>${g.waiting.length ? html`<button class="btn sm primary" onClick=${e => { e.stopPropagation(); onQc(g); }}>Quality control${g.waiting.length > 1 ? html`<span> (${g.waiting.length})</span>` : ''}</button>`
         : g.items.some(repairPending) ? html`<${RepairLoading}/>` : status ? html`<${FulfilmentBadge} status=${status}/>`
           : html`<span class=${'stamp ' + (rejected ? 'no' : approved ? 'ok' : 'wait')}>${rejected ? 'Rejected' : approved ? 'Approved' : 'Not checked'}</span>`}
-        <${SupplierZipOrder} order=${g} zip=${zip}/></td>
+        <${SupplierZipOrder} order=${g} zip=${zip}/><${AutoDispatchTag} orderId=${g.id} pending=${pending}/></td>
       <td class="small muted" style="white-space:nowrap">${fmt.date(g.at)}</td>
       <td class="hide-m small trunc" style="max-width:260px">${g.session ? html`<button type="button" class="btn ghost sm" onClick=${e => { e.stopPropagation(); onCustomer(g.session); }}>${g.customer || g.email || 'Customer'}</button>` : g.customer || g.email || '–'}${g.customer && g.email && html`<span class="tiny dim" style="display:block">${g.email}</span>`}</td>
     </tr>
@@ -343,7 +344,7 @@ export function Orders() {
     event.currentTarget.checked = autoSend;
     if (enabled && !await confirm({
       title: 'Zapnout automatické odesílání?',
-      body: 'Budoucí objednávky s připravenými tiskovými soubory se schválí automaticky a pošlou přímo do KvikTisku. Stávající objednávky zůstanou k ručnímu odeslání.',
+      body: 'Budoucí objednávky s připravenými tiskovými soubory se schválí automaticky a za 30 minut odejdou do KvikTisku. Do té doby je v Objednávkách uvidíte s časem odeslání a můžete je zastavit. Stávající objednávky zůstanou k ručnímu odeslání.',
       ok: 'Zapnout automatické odesílání',
     })) return;
     setAutoBusy(true);
@@ -355,6 +356,7 @@ export function Orders() {
     finally { setAutoBusy(false); }
   };
   const editor = role === 'owner' || role === 'editor';
+  const autoPending = useAutoDispatch(editor);
   const sendAll = async () => {
     setBulkBusy(true);
     try {
@@ -421,8 +423,9 @@ export function Orders() {
       <${Picker} groups=${[{ id: 'show', title: 'Show', value: filter, options: ORDER_FILTERS }]} onChange=${(_, v) => { setFilter(v); setPage(0); }}/></div>
     ${error && html`<div class="card red">${error.message}</div>`}
     <${SupplierZipPanel} zip=${zip} owner=${role === 'owner'}/>
+    ${editor && html`<${AutoDispatchPanel} pending=${autoPending} onChanged=${() => reload(true)}/><${TrackingReviewPanel} editor=${editor} onChanged=${() => reload(true)}/><${ShopifySyncProblems} editor=${editor}/>`}
     <div class="card tbl-wrap" style="padding:0"><table class="tbl slim orders"><thead><tr><th></th><th></th><th>Order no.</th><th>${lang() === 'cs' ? 'Stav' : 'Status'}</th><th>When</th><th class="hide-m">Customer</th></tr></thead>
-      ${!data ? html`<tbody><tr><td colspan="6"><${Skel} hgt="200"/></td></tr></tbody>` : rows.map(g => html`<${OrderRow} key=${g.id} g=${g} onQc=${setQc} onCustomer=${openCustomer} zip=${zip} editor=${editor} onChanged=${() => reload(true)}/>`)}
+      ${!data ? html`<tbody><tr><td colspan="6"><${Skel} hgt="200"/></td></tr></tbody>` : rows.map(g => html`<${OrderRow} key=${g.id} g=${g} onQc=${setQc} onCustomer=${openCustomer} zip=${zip} editor=${editor} onChanged=${() => reload(true)} pending=${autoPending}/>`)}
       ${data && !groups.length && html`<tbody><tr><td colspan="6"><${Empty}>No orders yet</${Empty}></td></tr></tbody>`}</table>
       ${data && !all && groups.length > PEEK && html`<div class="more-rows"><button class="btn ghost sm" onClick=${() => setAll(true)}>Show all</button></div>`}</div>
     ${all && pages > 1 && html`<${Pager} page=${page} pages=${pages} onPage=${setPage}/>`}
