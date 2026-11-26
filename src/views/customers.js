@@ -210,7 +210,7 @@ function QcModal({ o, onClose, onDone }) {
     <div class="row" style="gap:14px;align-items:flex-start">
       <div class="col" style="gap:4px"><div><b>${o.style || '–'}</b></div><div class="small">${o.material} ${o.size} × ${o.qty}</div><div class="tiny dim">revision ${o.revision}</div>
         <div class="col" style="gap:3px;margin-top:6px">${checks.map(([ok, l]) => html`<div class=${'small ' + (ok ? 'acid' : 'red')}>${ok ? '✓' : '✕'} ${l}</div>`)}</div></div></div>
-    <div class="tiny dim" style="margin-top:12px">${o.test ? 'Po schválení všech portrétů přijde testovací ZIP do interní schránky.' : 'Po schválení všech portrétů se objednávka předá do KvikTisku.'}</div>
+    <div class="tiny dim" style="margin-top:12px">${o.review_only ? 'Potvrzením se uzavře opětovná kontrola. Předchozí odeslání zůstane v historii.' : o.test ? 'Po schválení všech portrétů přijde testovací ZIP do interní schránky.' : 'Po schválení všech portrétů se zařadí ZIP objednávky k odeslání.'}</div>
     <div class="row wrap" style="gap:8px;margin-top:10px;align-items:flex-end">
       ${canReview && html`<label class="f grow">${editing ? 'Co má AI opravit?' : rej ? 'Why is it rejected? (required)' : 'Note (optional)'}<input class="in" maxlength="2000" value=${note} onInput=${e => setNote(e.target.value)}/></label>`}
       ${editor && o.manual_upload_available && html`<input ref=${input} type="file" accept=${o.manual_png_available ? 'image/jpeg,image/png,.jpg,.jpeg,.png' : 'image/jpeg,.jpg,.jpeg'} hidden onChange=${upload}/>
