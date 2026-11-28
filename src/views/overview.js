@@ -4,8 +4,9 @@ import { html, Kpi, Bars, Pill, Icon, Switch, Empty, SImg, confirm, useRpc, Wait
 import { windowTotals } from './finance.js';
 import { rpc, fmt } from '../api.js';
 import { toast, useStore } from '../store.js';
-import { go } from '../router.js';
+import { go, useRoute } from '../router.js';
 import { lang } from '../i18n.js';
+import { IdeaBoard } from './idea-board.js';
 const CZ = lang() === 'cs';
 
 function NeedsYou() {
@@ -139,7 +140,11 @@ function SaintBusiness() {
 }
 
 export function Overview() {
+  const [, section] = useRoute();
+  if (section === 'napady') return html`<${IdeaBoard}/>`;
+
   return html`<div class="page overview">
+    <div class="idea-overview-link"><a class="btn sm" href="#/overview/napady"><${Icon} n="bolt" s="14"/>Nástěnka nápadů</a></div>
     <${SaintBusiness}/>
     <${RecentOrders}/>
     <${NeedsYou}/>
