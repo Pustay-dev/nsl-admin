@@ -56,8 +56,12 @@ function Numbers() {
   const T = fin.data ? windowTotals(fin.data, P.days) : null;
   const paid = ord.data ? new Set(ord.data.filter(o => o.payment === 'paid' && P.inWindow(o.at)).map(o => o.shopify_order_id || o.id)).size : null;
   const cpo = T && T.orders && T.ads ? T.ads / T.orders : null; // ad money per paid order
+  const aoc = T?.orders ? (T.printing + T.generation + T.ads + T.other) / T.orders : null;
+  const aocHelp = CZ
+    ? 'Průměrný náklad na objednávku. Tisk, doprava, AI, reklama a ostatní náklady dělené počtem zaplacených objednávek ve vybraném období.'
+    : 'Average order cost. Printing, delivery, AI, ads and other costs divided by paid orders in the selected period.';
   return html`<div class="grid g4 stats">
-    <${Kpi} label="Paid orders" v=${paid} sub=${P.label}/>
+    <${Kpi} label="Paid orders" v=${paid} sub=${html`${fmt.czk(aoc)} <abbr title=${aocHelp} aria-label=${aocHelp}>aoc</abbr>`}/>
     <${Kpi} label="Revenue" v=${T?.revenue ?? null} f=${fmt.czk} sub=${T ? (CZ ? 'zisk ' : 'profit ') + fmt.czk(T.profit) : ''}/>
     <${Kpi} label="Ads per order" v=${cpo} f=${fmt.czk} sub=${T ? (CZ ? 'reklamy ' : 'ads ') + fmt.czk(T.ads || 0) : ''}/>
     <${Kpi} label="AI spend" v=${an.data?.spend_estimate_usd ?? null} f=${fmt.usd} sub=${an.data ? '≈ ' + fmt.czk(an.data.spend_estimate_czk) : ''}/>
